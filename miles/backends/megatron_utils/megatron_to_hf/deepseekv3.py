@@ -3,6 +3,16 @@ import re
 import torch
 
 
+def _convert_router_weight(args, param):
+    if getattr(args, "update_weight_transfer_mode", None) != "disk-delta":
+        return param
+    if getattr(args, "bf16", False):
+        return param.to(torch.bfloat16)
+    if getattr(args, "fp16", False):
+        return param.to(torch.float16)
+    return param
+
+
 def convert_deepseekv3_to_hf(args, name, param):
     if name == "module.module.embedding.word_embeddings.weight":
         return [("model.embed_tokens.weight", param)]
@@ -130,7 +140,7 @@ def convert_deepseekv3_to_hf(args, name, param):
         elif rest == "pre_mlp_layernorm.weight":
             return [(f"model.layers.{layer_idx}.post_attention_layernorm.weight", param)]
         elif rest == "mlp.router.weight":
-            return [(f"model.layers.{layer_idx}.mlp.gate.weight", param)]
+            return [(f"model.layers.{layer_idx}.mlp.gate.weight", _convert_router_weight(args, param))]
         elif rest == "mlp.router.expert_bias":
             return [(f"model.layers.{layer_idx}.mlp.gate.e_score_correction_bias", param)]
 
