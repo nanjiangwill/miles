@@ -122,6 +122,9 @@ class ServerGroup:
                 }.items()
             }
             env_vars.update(dumper_utils.get_sglang_env(self.args))
+            # TODO(#2596): When Miles router supports PD sampling-mask replay,
+            # set SGLANG_DISAGGREGATION_SAMPLING_MASK_MAX_TOKENS to
+            # rollout_top_k + 1 for prefill and decode groups.
 
             # The node-0 facade launches SGLangServerActor (same job), which
             # spawns SchedulerActors for ALL of the engine's ranks — so it

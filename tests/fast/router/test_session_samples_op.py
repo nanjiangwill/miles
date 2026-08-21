@@ -25,7 +25,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from tests.fast.rollout.session.test_samples import _make_record
 
-from miles.rollout.session.core import SessionCore
+from miles.rollout.session.core import SessionCore, prepare_chat_request
 from miles.rollout.session.linear_trajectory import SessionRegistry
 from miles.rollout.session.samples.codec import decode_samples_and_merge_input_sample
 from miles.rollout.session.sessions import setup_session_routes
@@ -57,20 +57,64 @@ class _UnusedBackend:
         raise AssertionError("collect_samples must not touch the proxy backend")
 
 
-def _build_core(use_addition_r3: bool = False) -> SessionCore:
+def _build_core(use_addition_r3: bool = False, args=_ARGS) -> SessionCore:
     # Mirrors setup_session_routes (sessions.py): tokenizer + registry + core.
-    tokenizer = load_tokenizer(
-        _ARGS.hf_checkpoint, chat_template_path=_ARGS.chat_template_path, trust_remote_code=True
-    )
+    tokenizer = load_tokenizer(args.hf_checkpoint, chat_template_path=args.chat_template_path, trust_remote_code=True)
     tito_tokenizer = get_tito_tokenizer(
         tokenizer,
-        tokenizer_type=_ARGS.tito_model,
-        chat_template_kwargs=_ARGS.apply_chat_template_kwargs,
+        tokenizer_type=args.tito_model,
+        chat_template_kwargs=args.apply_chat_template_kwargs,
     )
-    registry = SessionRegistry(_ARGS, tokenizer, tito_tokenizer=tito_tokenizer)
+    registry = SessionRegistry(args, tokenizer, tito_tokenizer=tito_tokenizer)
     return SessionCore(
-        _UnusedBackend(), registry, _ARGS, _ARGS.session_server_instance_id, use_addition_r3=use_addition_r3
+        _UnusedBackend(), registry, args, args.session_server_instance_id, use_addition_r3=use_addition_r3
     )
+
+
+def test_session_request_uses_native_sampling_replay_without_overwriting_filters():
+    args = SimpleNamespace(
+        rollout_top_p=0.95,
+        rollout_top_k=32,
+        rollout_temperature=0.7,
+        use_rollout_routing_replay=False,
+        use_rollout_indexer_replay=False,
+    )
+    tokenizer = SimpleNamespace(chat_template_kwargs={})
+    body = json.dumps(
+        {
+            "top_p": 0.8,
+            "custom_params": {"caller_option": "kept"},
+        }
+    ).encode()
+
+    request, _, _ = prepare_chat_request(body, args, tokenizer)
+
+    assert request["return_sampling_mask"] is True
+    assert request["temperature"] == 0.7
+    assert request["top_p"] == 0.8
+    assert request["top_k"] == 32
+    assert request["custom_params"] == {"caller_option": "kept"}
+
+
+def test_session_request_can_disable_sampling_replay_for_evaluation():
+    args = SimpleNamespace(
+        rollout_top_p=0.95,
+        rollout_top_k=32,
+        rollout_temperature=1.0,
+        use_rollout_routing_replay=False,
+        use_rollout_indexer_replay=False,
+    )
+    tokenizer = SimpleNamespace(chat_template_kwargs={})
+
+    request, _, _ = prepare_chat_request(
+        json.dumps({"return_sampling_mask": False}).encode(),
+        args,
+        tokenizer,
+    )
+
+    assert request["return_sampling_mask"] is False
+    assert "top_p" not in request
+    assert "top_k" not in request
 
 
 @pytest.fixture(scope="module")
@@ -81,6 +125,17 @@ def core():
 @pytest.fixture(scope="module")
 def addition_core():
     return _build_core(use_addition_r3=True)
+
+
+@pytest.fixture(scope="module")
+def sampling_core():
+    args = SimpleNamespace(
+        **vars(_ARGS),
+        rollout_top_p=0.95,
+        rollout_top_k=32,
+        rollout_temperature=1.0,
+    )
+    return _build_core(args=args)
 
 
 # ── fixtures: a two-turn trajectory with R3 / cache stats / weight versions ──
@@ -205,6 +260,38 @@ async def test_assembled_sample_golden(core):
         {"t0": None, "t1": 0.0, "turn": 2, "prev_t1": 0.0},
     ]
     assert reply.empty_reason is None
+
+
+async def test_sampling_support_crosses_tito_merge_and_samples_wire(sampling_core):
+    records = [
+        _make_record(
+            prompt_token_ids=[1, 2, 3],
+            output_token_ids=[10, 11],
+            sampling_masks=[[10, 4], [11, 5]],
+            sampling_log_probs=[-0.125, -0.25],
+        ),
+        _make_record(
+            prompt_token_ids=[1, 2, 3, 10, 11, 20, 21],
+            output_token_ids=[30, 31],
+            sampling_masks=[[30, 6], [31, 7, 8]],
+            sampling_log_probs=[-0.5, -1.0],
+        ),
+    ]
+    sid = await _make_session(sampling_core, records, _ACCUMULATED)
+    status, payload = await _collect_via_op(sampling_core, sid)
+
+    assert status == 200
+    (sample,) = decode_samples_and_merge_input_sample(
+        payload,
+        _input_sample(),
+        fields=sampling_core.samples_wire_fields,
+    ).samples
+    ids, offsets = sample.rollout_sampling_mask._as_tensors()
+
+    assert sample.tokens == _ACCUMULATED
+    assert sample.rollout_log_probs == [-0.125, -0.25, 0.0, 0.0, -0.5, -1.0]
+    assert ids.tolist() == [10, 4, 11, 5, 20, 21, 30, 6, 31, 7, 8]
+    assert offsets.tolist() == [0, 2, 4, 5, 6, 8, 11]
 
 
 async def test_truncation_golden(core):

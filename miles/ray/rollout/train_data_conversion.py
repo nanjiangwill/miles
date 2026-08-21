@@ -7,6 +7,7 @@ from miles.utils import object_store
 from miles.utils.dp_schedule import build_dp_schedule, has_full_schedule_config
 from miles.utils.multi_lora import is_multi_lora_enabled
 from miles.utils.object_store import ValueSpec
+from miles.utils.sampling import top_p_sampling_replay_enabled
 from miles.utils.seqlen_balancing import get_seqlen_balanced_partitions
 from miles.utils.timer import Timer
 from miles.utils.types import Sample
@@ -114,15 +115,14 @@ def convert_samples_to_train_data(
     if samples[0].rollout_log_probs is not None:
         train_data["rollout_log_probs"] = [sample.rollout_log_probs for sample in samples]
 
-    has_sampling_mask = any(sample.rollout_sampling_mask is not None for sample in samples)
-    if has_sampling_mask:
+    if top_p_sampling_replay_enabled(args):
         sampling_mask_ids = []
         sampling_mask_offsets = []
         for position, sample in enumerate(samples):
             sample.validate()
             if sample.rollout_sampling_mask is None:
                 raise ValueError(
-                    "sampling-mask data must be present for every training sample; "
+                    "top-p sampling replay requires sampling-mask data for every training sample; "
                     f"missing at position={position}, sample_index={sample.index}, status={sample.status}"
                 )
             ids, offsets = sample.rollout_sampling_mask._as_tensors()
