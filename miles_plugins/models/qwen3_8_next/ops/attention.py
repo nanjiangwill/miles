@@ -108,7 +108,14 @@ class Qwen38NextAttention(SelfAttention):
             self._qsa_cu_seqlens = None
             positions = torch.arange(seq, device=hidden_states.device)
         with torch.no_grad():
-            selection = self.indexer(indexer_states[:, 0], positions, cu_seqlens=self._qsa_cu_seqlens)
+            use_mrope = getattr(self.config, "position_embedding_type", None) == "mrope"
+            rotary_pos_emb = kwargs.get("rotary_pos_emb") if use_mrope else None
+            selection = self.indexer(
+                indexer_states[:, 0],
+                positions,
+                cu_seqlens=self._qsa_cu_seqlens,
+                rotary_pos_emb=rotary_pos_emb,
+            )
             seq_start = torch.arange(seq, device=positions.device) - positions
             r = self.compress_ratio
             tail_in_seq = (positions + 1) // r * r
