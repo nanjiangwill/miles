@@ -13,8 +13,11 @@ from megatron.core.transformer.attention import SelfAttention
 from megatron.core.transformer.module import MegatronModule
 from torch import Tensor
 
+from miles_plugins.models.qwen3_8_next.ops.kernel.qsa_block_sparse_attn import (
+    qsa_block_sparse_attention_triton,
+)
 from miles_plugins.models.qwen3_8_next.ops.kernel.qsa_sparse_attn import qsa_sparse_attention_triton
-from miles_plugins.models.qwen3_8_next.ops.qsa_indexer import Qwen38NextQSAIndexer
+from miles_plugins.models.qwen3_8_next.ops.qsa_indexer import PackedBlockLayout, Qwen38NextQSAIndexer
 
 
 class Qwen38NextQSACoreAttention(MegatronModule):
@@ -35,7 +38,13 @@ class Qwen38NextQSACoreAttention(MegatronModule):
                 "Qwen38NextAttention.forward sets it before delegating; reaching here "
                 "means core_attention was called out of band."
             )
+        block_form = getattr(self._owner, "_qsa_block_form", None)
         if query.dim() == 3:
+            if block_form is not None:
+                sel_bitmap, lo, hi, blk_base, tok_base, blk = block_form
+                return qsa_block_sparse_attention_triton(
+                    query, key, value, sel_bitmap, lo, hi, blk_base, tok_base, self.softmax_scale, blk
+                ).reshape(query.shape[0], -1)
             return qsa_sparse_attention_triton(query, key, value, selection, self.softmax_scale).reshape(
                 query.shape[0], -1
             )
@@ -62,6 +71,7 @@ class Qwen38NextAttention(SelfAttention):
         self.compress_ratio = config.qwen3_8_next_indexer_compress_ratio
         self.core_attention = Qwen38NextQSACoreAttention(config, layer_number, owner=self)
         self._qsa_selection = None
+        self._qsa_block_form = None
 
     @staticmethod
     def _packed_positions(cu_seqlens: Tensor, total: int) -> Tensor:
@@ -117,8 +127,40 @@ class Qwen38NextAttention(SelfAttention):
             seg_lo = seq_start.unsqueeze(1)
             ok = (merged >= seg_lo) & (merged <= pack_pos) & (merged >= 0)
             self._qsa_selection = torch.where(ok, merged, torch.full_like(merged, -1))
+            self._qsa_block_form = self._publish_block_form(self._qsa_selection, positions, seq_start, seq)
         try:
             return super().forward(hidden_states, *args, **kwargs)
         finally:
             self._qsa_selection = None
             self._qsa_cu_seqlens = None
+            self._qsa_block_form = None
+
+    def _publish_block_form(self, selection: Tensor, positions: Tensor, seq_start: Tensor, seq: int):
+        """Selection rows -> the block form the tensor-core kernel consumes.
+
+        Block ids come from the indexer's own per-sequence grid (``PackedBlockLayout``), not
+        from a formula over ``seq_start``: a ceil(seq_start / ratio) base looks right but
+        collides for some length combinations (lens [301, 211] puts one sequence's last
+        block on the next sequence's first), which would silently mix selections.
+        """
+        ratio = self.compress_ratio
+        cu = self._qsa_cu_seqlens
+        if cu is not None and cu.numel() > 2:
+            layout = PackedBlockLayout(cu, positions, ratio)
+            blk_base = layout.token_block_start.to(torch.int32)
+            tok_base = layout.token_start.to(torch.int32)
+            num_blocks = layout.num_blocks
+        else:
+            blk_base = torch.zeros(seq, dtype=torch.int32, device=selection.device)
+            tok_base = torch.zeros(seq, dtype=torch.int32, device=selection.device)
+            num_blocks = -(-seq // ratio)
+
+        sel_bitmap = torch.zeros(seq, num_blocks, dtype=torch.uint8, device=selection.device)
+        valid = selection >= 0
+        if bool(valid.any()):
+            rows = torch.arange(seq, device=selection.device).unsqueeze(1).expand_as(selection)
+            blk = blk_base.unsqueeze(1).long() + (selection - tok_base.unsqueeze(1)).div(ratio, rounding_mode="floor")
+            sel_bitmap[rows[valid], blk[valid].long().clamp_(0, num_blocks - 1)] = 1
+        lo = tok_base
+        hi = (positions + seq_start).to(torch.int32)
+        return sel_bitmap, lo, hi, blk_base, tok_base, ratio
