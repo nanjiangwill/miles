@@ -81,9 +81,7 @@ class PackedBlockLayout:
         self.token_block_start = seq_block_start[seg]
         self.token_start = seq_token_start[seg]
         # per block
-        self.block_seq = torch.repeat_interleave(
-            torch.arange(blocks_per_seq.numel(), device=device), blocks_per_seq
-        )
+        self.block_seq = torch.repeat_interleave(torch.arange(blocks_per_seq.numel(), device=device), blocks_per_seq)
         self.block_local = torch.arange(self.num_blocks, device=device) - seq_block_start[self.block_seq]
 
 
