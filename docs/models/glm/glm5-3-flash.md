@@ -145,8 +145,7 @@ covers the KDA, DSA and hyper-connection paths at once.
 
 The VLM validation in [#2792](https://github.com/radixark/miles/pull/2792) is a two-step
 Geo3K smoke with the four-layer language slice and complete visual tower on one 8 × B300
-node ([Modal app](https://modal.com/apps/modal-labs/nan-dev/ap-46XxFcJ5MeQ8662eDbliq7),
-[W&B run](https://wandb.ai/nan-playground/miles-glm53-vlm/runs/049apd1e)). Step 0 had
+node ([W&B run](https://wandb.ai/nan-playground/miles-glm53-vlm/runs/049apd1e)). Step 0 had
 rollout/train mean log-probs of -9.5348/-9.5424, PPO KL 0.001155, and mean absolute
 log-prob difference 0.08584; step 1 had -9.4927/-9.5067, PPO KL 0.001375, and mean
 absolute difference 0.10136. The initial language-weight synchronization passed the exact
