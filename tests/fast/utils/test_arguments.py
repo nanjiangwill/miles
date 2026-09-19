@@ -255,6 +255,40 @@ def test_recompute_logprobs_via_prefill_flag_is_parsed():
             ["--rollout-top-p", "0.95", "--rollout-top-k", "32"],
             "currently requires --use-miles-router",
         ),
+        (
+            [
+                "--rollout-top-p",
+                "0.95",
+                "--rollout-top-k",
+                "32",
+                "--use-miles-router",
+                "--kl-coef",
+                "0.1",
+            ],
+            "cannot currently be combined with reference KL or teacher distillation",
+        ),
+        (
+            [
+                "--rollout-top-p",
+                "0.95",
+                "--rollout-top-k",
+                "32",
+                "--use-miles-router",
+                "--use-kl-loss",
+            ],
+            "cannot currently be combined with reference KL or teacher distillation",
+        ),
+        (
+            [
+                "--rollout-top-p",
+                "0.95",
+                "--rollout-top-k",
+                "32",
+                "--use-miles-router",
+                "--use-opd",
+            ],
+            "cannot currently be combined with reference KL or teacher distillation",
+        ),
     ],
 )
 def test_sampling_support_arguments_fail_closed(extra, message):

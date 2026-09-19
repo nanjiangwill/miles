@@ -2967,6 +2967,11 @@ def miles_validate_args(args):
                 "sampling-support replay currently requires --use-miles-router; "
                 "the SGLang v0.5.20 router does not preserve return_sampling_mask"
             )
+        if args.kl_coef != 0 or args.use_kl_loss or args.use_opd:
+            raise ValueError(
+                "sampling-support replay cannot currently be combined with reference KL or teacher distillation; "
+                "those objectives require a separate full-policy actor score"
+            )
 
     if not args.use_session_server and args.tito_model != TITOTokenizerType.DEFAULT.value:
         raise ValueError(
