@@ -119,6 +119,31 @@ def test_true_on_policy_masks_logprob_but_keeps_full_vocab_entropy():
     torch.testing.assert_close(entropy, expected_entropy)
 
 
+def test_sampling_support_normalization_has_the_expected_actor_gradient():
+    logits = torch.tensor(
+        [[2.0, 1.0, 0.0, -1.0], [-1.0, 2.0, 1.0, 0.0]],
+        dtype=torch.float64,
+        requires_grad=True,
+    )
+    tokens = torch.tensor([0, 1])
+    sampling_mask = torch.tensor([[True, False, True, False], [False, True, False, False]])
+
+    log_probs, _ = _calculate_log_probs_and_entropy_true_on_policy(
+        logits,
+        tokens,
+        None,
+        sampling_mask=sampling_mask,
+    )
+    log_probs.sum().backward()
+
+    first_support_probs = torch.softmax(logits.detach()[0, [0, 2]], dim=-1)
+    expected_grad = torch.zeros_like(logits)
+    expected_grad[0, 0] = 1 - first_support_probs[0]
+    expected_grad[0, 2] = -first_support_probs[1]
+
+    torch.testing.assert_close(logits.grad, expected_grad)
+
+
 def test_get_log_probs_and_entropy_applies_per_response_sampling_support(monkeypatch):
     parallel_state = SimpleNamespace(
         tp=SimpleNamespace(rank=0, group=None),
