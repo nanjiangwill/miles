@@ -24,6 +24,12 @@ ARG MEGATRON_BRANCH=miles-main
 # Empty means the branch HEAD at build time; release builds set it to freeze one commit.
 ARG MEGATRON_COMMIT=""
 
+# Pinned, not a branch tip: Megatron-Bridge's own Megatron-Core requirement moves
+# ahead of radixark/Megatron-LM, so an unpinned install silently breaks
+# `import megatron.bridge` on the next image build. Bump this together with
+# MEGATRON_BRANCH.
+ARG MEGATRON_BRIDGE_COMMIT=40b930897717941cfe2bd9806f417e28bf1bfa65
+
 ARG ENABLE_CUDA_13=1
 
 ARG WHEELS_REPO=yueming-yuan/miles-wheels
@@ -171,7 +177,7 @@ RUN pip install "git+https://github.com/NVIDIA-NeMo/Emerging-Optimizers.git@v0.3
 RUN TMS_CUDA_MAJOR=$(python3 -c "import torch; print(torch.version.cuda.split('.')[0])") \
     pip install git+https://github.com/fzyzcjy/torch_memory_saver.git@b5588e83de86412a48689a6583a4b567e75f7acc --no-cache-dir --force-reinstall
 RUN pip install "nvidia-modelopt[torch]>=0.37.0" --no-build-isolation
-RUN pip install git+https://github.com/radixark/Megatron-Bridge.git@bridge --no-deps --no-build-isolation
+RUN pip install git+https://github.com/radixark/Megatron-Bridge.git@${MEGATRON_BRIDGE_COMMIT} --no-deps --no-build-isolation
 RUN pip install megatron-energon --no-deps
 RUN pip install multi-storage-client --no-deps
 
