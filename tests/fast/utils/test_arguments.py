@@ -245,10 +245,11 @@ def test_recompute_logprobs_via_prefill_flag_is_parsed():
                 "0.95",
                 "--rollout-top-k",
                 "32",
+                "--use-miles-router",
                 "--true-on-policy-mode",
                 "--recompute-logprobs-via-prefill",
             ],
-            "top-p sampling replay cannot be combined with --recompute-logprobs-via-prefill",
+            "sampling-support replay cannot be combined with --recompute-logprobs-via-prefill",
         ),
         (
             ["--rollout-top-p", "0.95", "--rollout-top-k", "32"],
@@ -256,7 +257,7 @@ def test_recompute_logprobs_via_prefill_flag_is_parsed():
         ),
     ],
 )
-def test_top_p_sampling_arguments_fail_closed(extra, message):
+def test_sampling_support_arguments_fail_closed(extra, message):
     parser = argparse.ArgumentParser()
     get_miles_extra_args_provider()(parser)
     args = parser.parse_args(extra + ["--num-rollout", "1"] + REQUIRED_ARGS)
@@ -265,15 +266,15 @@ def test_top_p_sampling_arguments_fail_closed(extra, message):
         miles_validate_args(args)
 
 
-def test_finite_top_k_does_not_enable_top_p_sampling_replay():
+def test_finite_top_k_enables_sampling_support_replay():
     parser = argparse.ArgumentParser()
     get_miles_extra_args_provider()(parser)
-    args = parser.parse_args(["--rollout-top-k", "32", "--num-rollout", "1"] + REQUIRED_ARGS)
+    args = parser.parse_args(["--rollout-top-k", "32", "--use-miles-router", "--num-rollout", "1"] + REQUIRED_ARGS)
 
     miles_validate_args(args)
 
 
-def test_top_p_sampling_replay_accepts_miles_router():
+def test_sampling_support_replay_accepts_miles_router():
     parser = argparse.ArgumentParser()
     get_miles_extra_args_provider()(parser)
     args = parser.parse_args(

@@ -9,7 +9,7 @@ from miles.rollout.generate_utils.sampling_mask import (
     merge_sampling_masks,
     should_return_sampling_mask,
 )
-from miles.utils.sampling_mask import RolloutSamplingMask, top_p_sampling_replay_enabled
+from miles.utils.sampling_mask import RolloutSamplingMask, sampling_support_replay_enabled
 from miles.utils.types import Sample
 
 
@@ -17,7 +17,7 @@ from miles.utils.types import Sample
     ("rollout_top_p", "rollout_top_k", "request_top_p", "request_top_k", "expected"),
     [
         (0.95, 32, 0.95, 32, True),
-        (1.0, 32, 1.0, 32, False),
+        (1.0, 32, 1.0, 32, True),
         (1.0, -1, 1.0, -1, False),
     ],
 )
@@ -53,30 +53,23 @@ def test_generate_payload_automatically_requests_sampling_mask(
     assert payload.get("return_sampling_mask", False) is expected
 
 
-@pytest.mark.parametrize(("rollout_top_p", "request_top_p"), [(1.0, 0.95)])
-def test_training_request_must_match_top_p_replay_mode(
-    rollout_top_p,
-    request_top_p,
-):
-    args = SimpleNamespace(rollout_top_p=rollout_top_p, rollout_top_k=32, rollout_temperature=1.0)
-
-    with pytest.raises(ValueError, match="requires --rollout-top-p < 1"):
-        should_return_sampling_mask(
-            args,
-            {"top_p": request_top_p, "top_k": 32, "temperature": 1.0},
-        )
-
-
 def test_enabled_replay_accepts_top_k_only_request():
-    args = SimpleNamespace(rollout_top_p=0.95, rollout_top_k=32, rollout_temperature=1.0)
+    args = SimpleNamespace(rollout_top_p=1.0, rollout_top_k=32, rollout_temperature=1.0)
 
     assert should_return_sampling_mask(args, {"top_p": 1.0, "top_k": 32, "temperature": 1.0}) is True
 
 
-def test_top_k_and_min_p_do_not_enable_sampling_mask_replay():
-    args = SimpleNamespace(rollout_top_p=1.0, rollout_top_k=32, rollout_temperature=1.0)
+def test_unbounded_run_rejects_bounded_training_request():
+    args = SimpleNamespace(rollout_top_p=1.0, rollout_top_k=-1, rollout_temperature=1.0)
 
-    assert should_return_sampling_mask(args, {"top_p": 1.0, "top_k": 32, "min_p": 0.1}) is False
+    with pytest.raises(ValueError, match="bounded training-request sampling requires bounded rollout sampling"):
+        should_return_sampling_mask(args, {"top_p": 1.0, "top_k": 32, "temperature": 1.0})
+
+
+def test_unbounded_run_treats_an_unset_request_top_k_as_unbounded():
+    args = SimpleNamespace(rollout_top_p=1.0, rollout_top_k=-1, rollout_temperature=1.0)
+
+    assert should_return_sampling_mask(args, {"top_p": 1.0, "top_k": None}) is False
 
 
 def test_evaluation_does_not_request_or_validate_training_sampling_support():
@@ -136,7 +129,6 @@ def test_training_request_top_k_must_fit_configured_bound(request_top_k):
         ("presence_penalty", 0.1),
         ("repetition_penalty", 1.1),
         ("logit_bias", {"1": 0.1}),
-        ("custom_logit_processor", "processor"),
     ],
 )
 def test_training_request_rejects_unreplayed_logit_transform(name, value):
@@ -149,13 +141,27 @@ def test_training_request_rejects_unreplayed_logit_transform(name, value):
         )
 
 
+def test_training_request_delegates_custom_logit_processor_compatibility_to_sglang():
+    args = SimpleNamespace(rollout_top_p=0.95, rollout_top_k=32, rollout_temperature=1.0)
+
+    assert should_return_sampling_mask(
+        args,
+        {
+            "top_p": 0.95,
+            "top_k": 32,
+            "temperature": 1.0,
+            "custom_logit_processor": "serialized-support-only-processor",
+        },
+    )
+
+
 @pytest.mark.parametrize(
     ("top_p", "top_k", "expected"),
-    [(0.95, -1, True), (1.0, 32, False), (1.0, -1, False)],
+    [(0.95, -1, True), (1.0, 32, True), (1.0, -1, False)],
 )
-def test_top_p_sampling_replay_enabled_only_by_top_p(top_p, top_k, expected):
+def test_sampling_support_replay_enabled_by_bounded_filter(top_p, top_k, expected):
     args = SimpleNamespace(rollout_top_p=top_p, rollout_top_k=top_k)
-    assert top_p_sampling_replay_enabled(args) is expected
+    assert sampling_support_replay_enabled(args) is expected
 
 
 def test_append_sampling_metadata_preserves_ragged_support_and_native_logprobs():

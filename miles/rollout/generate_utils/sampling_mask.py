@@ -1,7 +1,7 @@
 from argparse import Namespace
 from collections.abc import Mapping, Sequence
 
-from miles.utils.sampling_mask import RolloutSamplingMask, top_p_sampling_replay_enabled
+from miles.utils.sampling_mask import RolloutSamplingMask, sampling_support_replay_enabled
 from miles.utils.types import Sample
 
 
@@ -11,7 +11,7 @@ def should_return_sampling_mask(
     *,
     evaluation: bool = False,
 ) -> bool:
-    """Validate whether a training request can use top-p support replay."""
+    """Validate whether a training request must return its realized sampling support."""
     if evaluation:
         return False
 
@@ -21,14 +21,16 @@ def should_return_sampling_mask(
     if not 0.0 < request_top_p <= 1.0:
         raise ValueError(f"training request top_p must be in (0, 1], got {request_top_p}")
 
-    if not top_p_sampling_replay_enabled(args):
-        if request_top_p < 1.0:
-            raise ValueError("training request top_p < 1 requires --rollout-top-p < 1")
+    if not sampling_support_replay_enabled(args):
+        raw_top_k = params.get("top_k")
+        request_top_k = -1 if raw_top_k is None else int(raw_top_k)
+        if request_top_p < 1.0 or request_top_k > 0:
+            raise ValueError("bounded training-request sampling requires bounded rollout sampling")
         return False
 
     missing_params = [name for name in ("top_p", "top_k", "temperature") if params.get(name) is None]
     if missing_params:
-        raise ValueError(f"top-p sampling replay requires explicit request parameters: {', '.join(missing_params)}")
+        raise ValueError(f"sampling-support replay requires explicit request parameters: {', '.join(missing_params)}")
 
     configured_top_k = int(getattr(args, "rollout_top_k", -1))
     request_top_k = int(params["top_k"])
@@ -47,12 +49,11 @@ def should_return_sampling_mask(
         "presence_penalty": (0, 0.0, None),
         "repetition_penalty": (1, 1.0, None),
         "logit_bias": ({}, None),
-        "custom_logit_processor": (None,),
     }
     for name, allowed_values in unsupported.items():
         if params.get(name) not in allowed_values:
             raise ValueError(
-                f"{name} is not supported with top-p sampling replay because "
+                f"{name} is not supported with sampling-support replay because "
                 "the trainer cannot reproduce its logit transformation"
             )
     return True

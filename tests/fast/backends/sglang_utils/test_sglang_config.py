@@ -33,6 +33,8 @@ def _make_args(**overrides) -> Namespace:
         use_critic=False,
         critic_train_only=False,
         rollout_top_p=1.0,
+        rollout_top_k=-1,
+        sglang_sampling_mask_max_tokens=4096,
         sglang_speculative_algorithm=None,
     )
     defaults.update(overrides)
@@ -220,17 +222,19 @@ class TestOverridesResolution:
 
 
 class TestSamplingReplayCompatibility:
-    def test_speculative_decoding_without_top_p_replay_is_unchanged(self):
-        cfg = resolve_sglang_config(_make_args(sglang_speculative_algorithm="EAGLE"))
+    def test_speculative_decoding_is_not_blocked(self):
+        cfg = resolve_sglang_config(
+            _make_args(rollout_top_p=0.95, rollout_top_k=32, sglang_speculative_algorithm="DFLASH")
+        )
 
         assert len(cfg.models) == 1
 
-    def test_global_speculative_decoding_is_rejected_for_top_p_replay(self):
-        with pytest.raises(ValueError, match="does not support speculative decoding"):
-            resolve_sglang_config(_make_args(rollout_top_p=0.95, sglang_speculative_algorithm="EAGLE"))
+    def test_global_sampling_mask_capacity_must_cover_top_k(self):
+        with pytest.raises(ValueError, match="rollout-top-k=64.*sampling_mask_max_tokens=32"):
+            resolve_sglang_config(_make_args(rollout_top_k=64, sglang_sampling_mask_max_tokens=32))
 
-    def test_group_override_can_enable_speculative_decoding(self, tmp_path):
-        with pytest.raises(ValueError, match="DFLASH"):
+    def test_group_sampling_mask_capacity_override_must_cover_top_k(self, tmp_path):
+        with pytest.raises(ValueError, match="rollout-top-k=64.*sampling_mask_max_tokens=32"):
             _resolve_yaml(
                 tmp_path,
                 "sglang:\n"
@@ -239,11 +243,11 @@ class TestSamplingReplayCompatibility:
                 "      - worker_type: regular\n"
                 "        num_gpus: 8\n"
                 "        overrides:\n"
-                "          speculative_algorithm: DFLASH\n",
-                rollout_top_p=0.95,
+                "          sampling_mask_max_tokens: 32\n",
+                rollout_top_k=64,
             )
 
-    def test_group_override_can_disable_global_speculative_decoding(self, tmp_path):
+    def test_group_sampling_mask_capacity_override_can_raise_global_limit(self, tmp_path):
         cfg = _resolve_yaml(
             tmp_path,
             "sglang:\n"
@@ -252,14 +256,14 @@ class TestSamplingReplayCompatibility:
             "      - worker_type: regular\n"
             "        num_gpus: 8\n"
             "        overrides:\n"
-            "          speculative_algorithm: null\n",
-            rollout_top_p=0.95,
-            sglang_speculative_algorithm="EAGLE",
+            "          sampling_mask_max_tokens: 128\n",
+            rollout_top_k=64,
+            sglang_sampling_mask_max_tokens=32,
         )
 
-        assert cfg.models[0].server_groups[0].overrides["speculative_algorithm"] is None
+        assert cfg.models[0].server_groups[0].overrides["sampling_mask_max_tokens"] == 128
 
-    def test_placeholder_and_secondary_model_speculation_do_not_block_actor_replay(self, tmp_path):
+    def test_placeholder_and_secondary_model_capacity_do_not_block_actor_replay(self, tmp_path):
         cfg = _resolve_yaml(
             tmp_path,
             "sglang:\n"
@@ -270,16 +274,16 @@ class TestSamplingReplayCompatibility:
             "      - worker_type: placeholder\n"
             "        num_gpus: 4\n"
             "        overrides:\n"
-            "          speculative_algorithm: EAGLE\n"
+            "          sampling_mask_max_tokens: 1\n"
             "  - name: reward\n"
             "    update_weights: false\n"
             "    server_groups:\n"
             "      - worker_type: regular\n"
             "        num_gpus: 4\n"
             "        overrides:\n"
-            "          speculative_algorithm: EAGLE\n",
+            "          sampling_mask_max_tokens: 1\n",
             rollout_num_gpus=12,
-            rollout_top_p=0.95,
+            rollout_top_k=32,
         )
 
         assert len(cfg.models) == 2

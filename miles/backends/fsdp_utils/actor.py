@@ -33,7 +33,7 @@ from miles.utils.memory_utils import clear_memory, print_memory
 from miles.utils.processing_utils import load_processor, load_tokenizer
 from miles.utils.profile_utils import TrainProfiler
 from miles.utils.ray_utils import Box
-from miles.utils.sampling_mask import top_p_sampling_replay_enabled
+from miles.utils.sampling_mask import sampling_support_replay_enabled
 from miles.utils.timer import Timer, inverse_timer, timer
 from miles.utils.tracking_utils.tracking import init_tracking
 
@@ -371,7 +371,7 @@ class FSDPTrainRayActor(TrainRayActor):
             active_model.eval()
         else:
             active_model = self.model
-        use_rollout_sampling_mask = model_tag == "actor" and top_p_sampling_replay_enabled(self.args)
+        use_rollout_sampling_mask = model_tag == "actor" and sampling_support_replay_enabled(self.args)
 
         try:
             forward_data_store = []
@@ -512,7 +512,7 @@ class FSDPTrainRayActor(TrainRayActor):
             num_steps_per_rollout = len(num_microbatches)
             sampling_mask_keys = (
                 ("rollout_sampling_mask_ids", "rollout_sampling_mask_offsets")
-                if top_p_sampling_replay_enabled(self.args)
+                if sampling_support_replay_enabled(self.args)
                 else ()
             )
 

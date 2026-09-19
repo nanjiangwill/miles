@@ -5,8 +5,9 @@ from dataclasses import InitVar, dataclass, field
 import torch
 
 
-def top_p_sampling_replay_enabled(args) -> bool:
-    return float(getattr(args, "rollout_top_p", 1.0)) < 1.0
+def sampling_support_replay_enabled(args) -> bool:
+    """Whether rollout sampling uses a bounded support that must be replayed."""
+    return float(getattr(args, "rollout_top_p", 1.0)) < 1.0 or int(getattr(args, "rollout_top_k", -1)) > 0
 
 
 @dataclass(frozen=True, eq=False)

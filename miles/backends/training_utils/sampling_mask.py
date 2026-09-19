@@ -10,7 +10,7 @@ def get_rollout_sampling_masks(batch: Mapping[str, object]) -> list[RolloutSampl
     ids_batch = batch.get("rollout_sampling_mask_ids")
     offsets_batch = batch.get("rollout_sampling_mask_offsets")
     if ids_batch is None or offsets_batch is None:
-        raise ValueError("top-p actor scoring requires both sampling-mask wire fields")
+        raise ValueError("sampling-support actor scoring requires both sampling-mask wire fields")
     if not isinstance(ids_batch, Sequence) or not isinstance(offsets_batch, Sequence):
         raise TypeError("rollout sampling-mask ids and offsets must be sequences with one entry per sample")
     if len(ids_batch) != len(offsets_batch):

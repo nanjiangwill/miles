@@ -26,7 +26,7 @@ from miles.rollout.session.v2.session_state import (
 )
 from miles.rollout.session.v2.utils import build_leaf_material, tree_metadata
 from miles.utils.function_registry import load_function
-from miles.utils.sampling_mask import top_p_sampling_replay_enabled
+from miles.utils.sampling_mask import sampling_support_replay_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ class SessionCoreV2(SessionCore):
     ):
         super().__init__(backend, registry, config, session_server_instance_id, use_addition_r3=use_addition_r3)
         self.samples_wire_fields = COMPUTED_FIELDS_V2
-        if top_p_sampling_replay_enabled(config):
+        if sampling_support_replay_enabled(config):
             self.samples_wire_fields += ROLLOUT_SAMPLING_MASK_FIELDS
         # Import-path only in production: function_registry is process-local.
         self.sample_picker = load_function(config.session_sample_picker_path, sync_required=True)

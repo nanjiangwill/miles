@@ -11,7 +11,7 @@ import yaml
 from miles.backends.sglang_utils.arguments import collect_eval_sglang_overrides
 from miles.utils.multi_lora import is_multi_lora_enabled
 from miles.utils.pydantic_utils import FrozenStrictBaseModel
-from miles.utils.sampling_mask import top_p_sampling_replay_enabled
+from miles.utils.sampling_mask import sampling_support_replay_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -273,15 +273,18 @@ class SglangConfig(FrozenStrictBaseModel):
 
         assert offset_cursor.gpu == raw.total_num_gpus
 
-        if top_p_sampling_replay_enabled(args) and model_configs:
+        if sampling_support_replay_enabled(args) and model_configs:
             for group in model_configs[0].server_groups:
                 if group.worker_type == "placeholder":
                     continue
-                speculative_algorithm = group.overrides.get("speculative_algorithm", args.sglang_speculative_algorithm)
-                if speculative_algorithm is not None:
+                sampling_mask_max_tokens = group.overrides.get(
+                    "sampling_mask_max_tokens", args.sglang_sampling_mask_max_tokens
+                )
+                if args.rollout_top_k > sampling_mask_max_tokens:
                     raise ValueError(
-                        "top-p sampling replay does not support speculative decoding; "
-                        f"the primary rollout model enables {speculative_algorithm!r}"
+                        f"--rollout-top-k={args.rollout_top_k} exceeds the primary rollout server's "
+                        f"sampling_mask_max_tokens={sampling_mask_max_tokens}; lower top-k or increase "
+                        "--sglang-sampling-mask-max-tokens (or the server-group override)"
                     )
 
         return cls(models=model_configs)

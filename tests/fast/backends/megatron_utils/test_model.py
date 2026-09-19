@@ -148,7 +148,7 @@ def test_forward_only_omits_sampling_mask_for_callbacks_that_do_not_replay_sampl
     )
     batch = {
         "tokens": None,
-        "full_loss_masks": None,
+        "input_loss_masks": None,
         "multimodal_train_inputs": None,
         "unconcat_tokens": [],
         "total_lengths": [],
