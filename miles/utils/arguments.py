@@ -2968,6 +2968,9 @@ def miles_validate_args(args):
                 "the SGLang v0.5.20 router does not preserve return_sampling_mask"
             )
         if args.kl_coef != 0 or args.use_kl_loss or args.use_opd:
+            # The actor still produces full-vocabulary logits, but replay currently exposes only the
+            # support-normalized actor score to the loss. These objectives can be enabled once the loss
+            # path also preserves an unmasked actor score from the same forward pass.
             raise ValueError(
                 "sampling-support replay cannot currently be combined with reference KL or teacher distillation; "
                 "those objectives require a separate full-policy actor score"
