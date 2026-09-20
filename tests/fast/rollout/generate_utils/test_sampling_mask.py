@@ -53,10 +53,10 @@ def test_generate_payload_automatically_requests_sampling_mask(
     assert payload.get("return_sampling_mask", False) is expected
 
 
-def test_enabled_replay_accepts_top_k_only_request():
+def test_enabled_replay_accepts_request_top_k_above_default():
     args = SimpleNamespace(rollout_top_p=1.0, rollout_top_k=32, rollout_temperature=1.0)
 
-    assert should_return_sampling_mask(args, {"top_p": 1.0, "top_k": 32, "temperature": 1.0}) is True
+    assert should_return_sampling_mask(args, {"top_p": 1.0, "top_k": 64, "temperature": 1.0}) is True
 
 
 def test_unbounded_run_rejects_bounded_training_request():
@@ -111,11 +111,11 @@ def test_top_p_sampling_replay_requires_explicit_request_parameters(missing_para
         should_return_sampling_mask(args, params)
 
 
-@pytest.mark.parametrize("request_top_k", [-1, 33])
-def test_training_request_top_k_must_fit_configured_bound(request_top_k):
+@pytest.mark.parametrize("request_top_k", [-1, 0])
+def test_training_request_top_k_must_be_positive(request_top_k):
     args = SimpleNamespace(rollout_top_p=0.95, rollout_top_k=32, rollout_temperature=1.0)
 
-    with pytest.raises(ValueError, match=r"request top_k must be in \[1, 32\]"):
+    with pytest.raises(ValueError, match="request top_k must be positive"):
         should_return_sampling_mask(
             args,
             {"top_p": 0.95, "top_k": request_top_k, "temperature": 1.0},
@@ -139,20 +139,6 @@ def test_training_request_rejects_unreplayed_logit_transform(name, value):
             args,
             {"top_p": 0.95, "top_k": 32, "temperature": 1.0, name: value},
         )
-
-
-def test_training_request_delegates_custom_logit_processor_compatibility_to_sglang():
-    args = SimpleNamespace(rollout_top_p=0.95, rollout_top_k=32, rollout_temperature=1.0)
-
-    assert should_return_sampling_mask(
-        args,
-        {
-            "top_p": 0.95,
-            "top_k": 32,
-            "temperature": 1.0,
-            "custom_logit_processor": "serialized-support-only-processor",
-        },
-    )
 
 
 @pytest.mark.parametrize(

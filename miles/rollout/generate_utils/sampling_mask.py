@@ -32,10 +32,9 @@ def should_return_sampling_mask(
     if missing_params:
         raise ValueError(f"sampling-support replay requires explicit request parameters: {', '.join(missing_params)}")
 
-    configured_top_k = int(getattr(args, "rollout_top_k", -1))
     request_top_k = int(params["top_k"])
-    if not 0 < request_top_k <= configured_top_k:
-        raise ValueError(f"training request top_k must be in [1, {configured_top_k}], got {request_top_k}")
+    if request_top_k <= 0:
+        raise ValueError(f"training request top_k must be positive, got {request_top_k}")
 
     configured_temperature = float(getattr(args, "rollout_temperature", 1.0))
     request_temperature = float(params["temperature"])

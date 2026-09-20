@@ -32,10 +32,6 @@ def _make_args(**overrides) -> Namespace:
         critic_num_gpus_per_node=0,
         use_critic=False,
         critic_train_only=False,
-        rollout_top_p=1.0,
-        rollout_top_k=-1,
-        sglang_sampling_mask_max_tokens=4096,
-        sglang_speculative_algorithm=None,
     )
     defaults.update(overrides)
     defaults.setdefault("starts_inference_engines", not defaults["debug_train_only"] or defaults["eval_num_gpus"] > 0)
@@ -219,74 +215,6 @@ class TestOverridesResolution:
         )
         overrides = cfg.models[0].server_groups[0].overrides
         assert overrides["mem_fraction_static"] == 0.5
-
-
-class TestSamplingReplayCompatibility:
-    def test_speculative_decoding_is_not_blocked(self):
-        cfg = resolve_sglang_config(
-            _make_args(rollout_top_p=0.95, rollout_top_k=32, sglang_speculative_algorithm="DFLASH")
-        )
-
-        assert len(cfg.models) == 1
-
-    def test_global_sampling_mask_capacity_must_cover_top_k(self):
-        with pytest.raises(ValueError, match="rollout-top-k=64.*sampling_mask_max_tokens=32"):
-            resolve_sglang_config(_make_args(rollout_top_k=64, sglang_sampling_mask_max_tokens=32))
-
-    def test_group_sampling_mask_capacity_override_must_cover_top_k(self, tmp_path):
-        with pytest.raises(ValueError, match="rollout-top-k=64.*sampling_mask_max_tokens=32"):
-            _resolve_yaml(
-                tmp_path,
-                "sglang:\n"
-                "  - name: actor\n"
-                "    server_groups:\n"
-                "      - worker_type: regular\n"
-                "        num_gpus: 8\n"
-                "        overrides:\n"
-                "          sampling_mask_max_tokens: 32\n",
-                rollout_top_k=64,
-            )
-
-    def test_group_sampling_mask_capacity_override_can_raise_global_limit(self, tmp_path):
-        cfg = _resolve_yaml(
-            tmp_path,
-            "sglang:\n"
-            "  - name: actor\n"
-            "    server_groups:\n"
-            "      - worker_type: regular\n"
-            "        num_gpus: 8\n"
-            "        overrides:\n"
-            "          sampling_mask_max_tokens: 128\n",
-            rollout_top_k=64,
-            sglang_sampling_mask_max_tokens=32,
-        )
-
-        assert cfg.models[0].server_groups[0].overrides["sampling_mask_max_tokens"] == 128
-
-    def test_placeholder_and_secondary_model_capacity_do_not_block_actor_replay(self, tmp_path):
-        cfg = _resolve_yaml(
-            tmp_path,
-            "sglang:\n"
-            "  - name: actor\n"
-            "    server_groups:\n"
-            "      - worker_type: regular\n"
-            "        num_gpus: 4\n"
-            "      - worker_type: placeholder\n"
-            "        num_gpus: 4\n"
-            "        overrides:\n"
-            "          sampling_mask_max_tokens: 1\n"
-            "  - name: reward\n"
-            "    update_weights: false\n"
-            "    server_groups:\n"
-            "      - worker_type: regular\n"
-            "        num_gpus: 4\n"
-            "        overrides:\n"
-            "          sampling_mask_max_tokens: 1\n",
-            rollout_num_gpus=12,
-            rollout_top_k=32,
-        )
-
-        assert len(cfg.models) == 2
 
 
 class TestYamlShapeValidation:

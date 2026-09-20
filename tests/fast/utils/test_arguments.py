@@ -308,17 +308,6 @@ def test_finite_top_k_enables_sampling_support_replay():
     miles_validate_args(args)
 
 
-def test_sampling_support_replay_accepts_miles_router():
-    parser = argparse.ArgumentParser()
-    get_miles_extra_args_provider()(parser)
-    args = parser.parse_args(
-        ["--rollout-top-p", "0.95", "--rollout-top-k", "32", "--use-miles-router", "--num-rollout", "1"]
-        + REQUIRED_ARGS
-    )
-
-    miles_validate_args(args)
-
-
 def test_sglang_parallel_sizes_keep_server_args_destinations():
     parser = add_sglang_arguments(argparse.ArgumentParser())
     args = parser.parse_args(

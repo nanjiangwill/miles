@@ -58,14 +58,7 @@ def execute() -> None:
         "--adam-beta2 0.98 "
     )
 
-    grpo_args = (
-        "--advantage-estimator grpo "
-        "--kl-loss-coef 0.00 "
-        "--kl-loss-type k1 "
-        "--kl-coef 0.00 "
-        "--entropy-coef 0.00 "
-        "--eps-clip 4e-4 "
-    )
+    algorithm_args = "--advantage-estimator grpo "
 
     megatron_args = (
         "--tensor-model-parallel-size 2 "
@@ -92,7 +85,7 @@ def execute() -> None:
         ckpt_args
         + rollout_args
         + optimizer_args
-        + grpo_args
+        + algorithm_args
         + megatron_args
         + sglang_args
         + U.get_default_wandb_args(__file__)
