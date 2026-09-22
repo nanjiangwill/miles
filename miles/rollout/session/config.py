@@ -18,6 +18,7 @@ class SessionServerConfig(FrozenStrictBaseModel):
     rollout_temperature: float
     rollout_top_p: float
     rollout_top_k: int
+    use_rollout_sampling_mask: bool
     sglang_speculative_algorithm: str | None
     num_layers: int | None
     moe_router_topk: int | None
@@ -50,6 +51,7 @@ def compute_session_server_config(
         rollout_temperature=args.rollout_temperature,
         rollout_top_p=args.rollout_top_p,
         rollout_top_k=args.rollout_top_k,
+        use_rollout_sampling_mask=args.use_rollout_sampling_mask,
         sglang_speculative_algorithm=args.sglang_speculative_algorithm,
         num_layers=getattr(args, "num_layers", None),
         moe_router_topk=getattr(args, "moe_router_topk", None),

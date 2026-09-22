@@ -38,7 +38,6 @@ from miles.rollout.generate_utils.openai_endpoint_utils import OpenAIEndpointTra
 from miles.rollout.generate_utils.sampling_mask import should_return_sampling_mask
 from miles.rollout.session.v2.metrics import SESSION_ROLLOUT_METRICS_KEY
 from miles.utils.function_registry import load_function
-from miles.utils.sampling_mask import sampling_support_replay_enabled
 from miles.utils.types import Sample
 
 logger = logging.getLogger(__name__)
@@ -85,7 +84,7 @@ async def generate(input: GenerateFnInput) -> GenerateFnOutput:
         )
         if return_sampling_mask:
             request_kwargs["return_sampling_mask"] = True
-        elif input.evaluation and sampling_support_replay_enabled(input.args):
+        elif input.evaluation and input.args.use_rollout_sampling_mask:
             # The session server otherwise fills the run's training defaults.
             request_kwargs["return_sampling_mask"] = False
         agent_metadata = await custom_agent_function(

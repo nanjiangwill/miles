@@ -144,7 +144,7 @@ def test_compute_log_prob_replays_sampling_support_only_for_actor_scores(
     actor_module, monkeypatch, store_prefix, expected
 ):
     worker = object.__new__(actor_module.MegatronTrainRayActor)
-    worker.args = Namespace(rollout_top_p=0.95, rollout_top_k=32)
+    worker.args = Namespace(use_rollout_sampling_mask=True)
     worker.model = [object()]
     forward_only = Mock(return_value={"log_probs": []})
     monkeypatch.setattr(actor_module, "forward_only", forward_only)

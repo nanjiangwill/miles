@@ -23,7 +23,6 @@ from miles.utils.lora import is_lora_enabled
 from miles.utils.megatron_args_utils import compute_megatron_world_size_except_dp
 from miles.utils.object_store import ObjectStoreBackend
 from miles.utils.run_uuid import RUN_UUID_LENGTH, generate_run_uuid, validate_run_uuid
-from miles.utils.sampling_mask import sampling_support_replay_enabled
 from miles.utils.tracking_utils.ci_history import RECORD_DIR_ENV
 
 logger = logging.getLogger(__name__)
@@ -2951,7 +2950,10 @@ def miles_validate_args(args):
         raise ValueError(f"--rollout-top-p must be in (0, 1], got {args.rollout_top_p}")
     if args.rollout_top_k != -1 and args.rollout_top_k < 1:
         raise ValueError(f"--rollout-top-k must be -1 or at least 1, got {args.rollout_top_k}")
-    if sampling_support_replay_enabled(args):
+    # Bounded rollout sampling (finite top-p or positive top-k) is the single source of
+    # truth for sampling-support replay; every consumer reads this derived flag.
+    args.use_rollout_sampling_mask = args.rollout_top_p < 1.0 or args.rollout_top_k > 0
+    if args.use_rollout_sampling_mask:
         if args.rollout_top_k == -1:
             raise ValueError(
                 "--rollout-top-p below 1 requires a positive --rollout-top-k; "

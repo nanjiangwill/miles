@@ -70,6 +70,7 @@ _ARGS_DEFAULTS = dict(
     # get_responses / get_log_probs_and_entropy / get_values
     qkv_format="thd",
     rollout_temperature=1.0,
+    use_rollout_sampling_mask=False,
     allgather_cp=False,
     log_probs_chunk_size=-1,
     true_on_policy_mode=True,

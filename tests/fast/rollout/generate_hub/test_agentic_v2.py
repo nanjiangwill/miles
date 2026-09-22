@@ -37,6 +37,7 @@ def _generate_input(**args_kwargs) -> GenerateFnInput:
             "partial_rollout": False,
             "use_session_server": "v2",
             "sglang_speculative_algorithm": None,
+            "use_rollout_sampling_mask": False,
             **args_kwargs,
         }
     )
@@ -101,7 +102,9 @@ async def test_evaluation_explicitly_disables_session_sampling_replay(monkeypatc
 
     monkeypatch.setattr(agentic_tool_call.OpenAIEndpointTracer, "create", fake_create)
     monkeypatch.setattr(agentic_tool_call, "load_function", lambda path: fake_agent)
-    training_input = _generate_input(rollout_top_p=0.95, rollout_top_k=32, rollout_temperature=1.0)
+    training_input = _generate_input(
+        use_rollout_sampling_mask=True, rollout_top_p=0.95, rollout_top_k=32, rollout_temperature=1.0
+    )
     generate_input = GenerateFnInput(
         state=training_input.state,
         sample=training_input.sample,

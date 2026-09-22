@@ -82,6 +82,7 @@ def _serve_session(backend_url: str) -> Iterator[str]:
         rollout_temperature=1.0,
         rollout_top_p=1.0,
         rollout_top_k=-1,
+        use_rollout_sampling_mask=False,
         save_debug_trajectory_data=None,
         pause_generation_mode="in_place",
         num_layers=_NUM_LAYERS,

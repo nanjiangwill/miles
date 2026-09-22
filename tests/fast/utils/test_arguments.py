@@ -300,12 +300,24 @@ def test_sampling_support_arguments_fail_closed(extra, message):
         miles_validate_args(args)
 
 
-def test_finite_top_k_enables_sampling_support_replay():
+@pytest.mark.parametrize(
+    ("extra", "expected"),
+    [
+        (["--rollout-top-p", "0.95", "--rollout-top-k", "32", "--use-miles-router"], True),
+        (["--rollout-top-k", "32", "--use-miles-router"], True),
+        ([], False),
+    ],
+)
+def test_bounded_rollout_sampling_derives_use_rollout_sampling_mask(extra, expected):
+    """The replay switch is derived once at validation, not parsed as a flag."""
     parser = argparse.ArgumentParser()
     get_miles_extra_args_provider()(parser)
-    args = parser.parse_args(["--rollout-top-k", "32", "--use-miles-router", "--num-rollout", "1"] + REQUIRED_ARGS)
+    args = parser.parse_args(extra + ["--num-rollout", "1"] + REQUIRED_ARGS)
+    assert not hasattr(args, "use_rollout_sampling_mask")
 
     miles_validate_args(args)
+
+    assert args.use_rollout_sampling_mask is expected
 
 
 def test_sglang_parallel_sizes_keep_server_args_destinations():

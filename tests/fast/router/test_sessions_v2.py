@@ -50,6 +50,7 @@ def _serve_router(extra_args: dict | None = None):
             "rollout_temperature": 1.0,
             "rollout_top_p": 1.0,
             "rollout_top_k": -1,
+            "use_rollout_sampling_mask": False,
             "sglang_speculative_algorithm": None,
             "num_layers": None,
             "moe_router_topk": None,

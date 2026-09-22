@@ -9,21 +9,22 @@ from miles.rollout.generate_utils.sampling_mask import (
     merge_sampling_masks,
     should_return_sampling_mask,
 )
-from miles.utils.sampling_mask import RolloutSamplingMask, sampling_support_replay_enabled
+from miles.utils.sampling_mask import RolloutSamplingMask
 from miles.utils.types import Sample
 
 
 @pytest.mark.parametrize(
-    ("rollout_top_p", "rollout_top_k", "request_top_p", "request_top_k", "expected"),
+    ("rollout_top_p", "rollout_top_k", "use_rollout_sampling_mask", "request_top_p", "request_top_k", "expected"),
     [
-        (0.95, 32, 0.95, 32, True),
-        (1.0, 32, 1.0, 32, True),
-        (1.0, -1, 1.0, -1, False),
+        (0.95, 32, True, 0.95, 32, True),
+        (1.0, 32, True, 1.0, 32, True),
+        (1.0, -1, False, 1.0, -1, False),
     ],
 )
 def test_generate_payload_automatically_requests_sampling_mask(
     rollout_top_p,
     rollout_top_k,
+    use_rollout_sampling_mask,
     request_top_p,
     request_top_k,
     expected,
@@ -31,6 +32,7 @@ def test_generate_payload_automatically_requests_sampling_mask(
     args = SimpleNamespace(
         rollout_top_p=rollout_top_p,
         rollout_top_k=rollout_top_k,
+        use_rollout_sampling_mask=use_rollout_sampling_mask,
         rollout_temperature=1.0,
         rollout_max_response_len=16,
         rollout_max_context_len=None,
@@ -54,20 +56,26 @@ def test_generate_payload_automatically_requests_sampling_mask(
 
 
 def test_enabled_replay_accepts_request_top_k_above_default():
-    args = SimpleNamespace(rollout_top_p=1.0, rollout_top_k=32, rollout_temperature=1.0)
+    args = SimpleNamespace(
+        rollout_top_p=1.0, rollout_top_k=32, use_rollout_sampling_mask=True, rollout_temperature=1.0
+    )
 
     assert should_return_sampling_mask(args, {"top_p": 1.0, "top_k": 64, "temperature": 1.0}) is True
 
 
 def test_unbounded_run_rejects_bounded_training_request():
-    args = SimpleNamespace(rollout_top_p=1.0, rollout_top_k=-1, rollout_temperature=1.0)
+    args = SimpleNamespace(
+        rollout_top_p=1.0, rollout_top_k=-1, use_rollout_sampling_mask=False, rollout_temperature=1.0
+    )
 
     with pytest.raises(ValueError, match="bounded training-request sampling requires bounded rollout sampling"):
         should_return_sampling_mask(args, {"top_p": 1.0, "top_k": 32, "temperature": 1.0})
 
 
 def test_unbounded_run_treats_an_unset_request_top_k_as_unbounded():
-    args = SimpleNamespace(rollout_top_p=1.0, rollout_top_k=-1, rollout_temperature=1.0)
+    args = SimpleNamespace(
+        rollout_top_p=1.0, rollout_top_k=-1, use_rollout_sampling_mask=False, rollout_temperature=1.0
+    )
 
     assert should_return_sampling_mask(args, {"top_p": 1.0, "top_k": None}) is False
 
@@ -76,6 +84,7 @@ def test_evaluation_does_not_request_or_validate_training_sampling_support():
     args = SimpleNamespace(
         rollout_top_p=0.95,
         rollout_top_k=32,
+        use_rollout_sampling_mask=True,
         rollout_temperature=1.0,
         rollout_max_response_len=16,
         rollout_max_context_len=None,
@@ -95,7 +104,9 @@ def test_evaluation_does_not_request_or_validate_training_sampling_support():
 
 
 def test_training_request_temperature_must_match_actor_scoring_temperature():
-    args = SimpleNamespace(rollout_top_p=0.95, rollout_top_k=32, rollout_temperature=1.0)
+    args = SimpleNamespace(
+        rollout_top_p=0.95, rollout_top_k=32, use_rollout_sampling_mask=True, rollout_temperature=1.0
+    )
 
     with pytest.raises(ValueError, match="request temperature 0.5"):
         should_return_sampling_mask(args, {"top_p": 0.95, "top_k": 32, "temperature": 0.5})
@@ -103,7 +114,9 @@ def test_training_request_temperature_must_match_actor_scoring_temperature():
 
 @pytest.mark.parametrize("missing_param", ["top_p", "top_k", "temperature"])
 def test_top_p_sampling_replay_requires_explicit_request_parameters(missing_param):
-    args = SimpleNamespace(rollout_top_p=0.95, rollout_top_k=32, rollout_temperature=1.0)
+    args = SimpleNamespace(
+        rollout_top_p=0.95, rollout_top_k=32, use_rollout_sampling_mask=True, rollout_temperature=1.0
+    )
     params = {"top_p": 0.95, "top_k": 32, "temperature": 1.0}
     del params[missing_param]
 
@@ -113,7 +126,9 @@ def test_top_p_sampling_replay_requires_explicit_request_parameters(missing_para
 
 @pytest.mark.parametrize("request_top_k", [-1, 0])
 def test_training_request_top_k_must_be_positive(request_top_k):
-    args = SimpleNamespace(rollout_top_p=0.95, rollout_top_k=32, rollout_temperature=1.0)
+    args = SimpleNamespace(
+        rollout_top_p=0.95, rollout_top_k=32, use_rollout_sampling_mask=True, rollout_temperature=1.0
+    )
 
     with pytest.raises(ValueError, match="request top_k must be positive"):
         should_return_sampling_mask(
@@ -132,22 +147,15 @@ def test_training_request_top_k_must_be_positive(request_top_k):
     ],
 )
 def test_training_request_rejects_unreplayed_logit_transform(name, value):
-    args = SimpleNamespace(rollout_top_p=0.95, rollout_top_k=32, rollout_temperature=1.0)
+    args = SimpleNamespace(
+        rollout_top_p=0.95, rollout_top_k=32, use_rollout_sampling_mask=True, rollout_temperature=1.0
+    )
 
     with pytest.raises(ValueError, match=rf"{name} is not supported"):
         should_return_sampling_mask(
             args,
             {"top_p": 0.95, "top_k": 32, "temperature": 1.0, name: value},
         )
-
-
-@pytest.mark.parametrize(
-    ("top_p", "top_k", "expected"),
-    [(0.95, -1, True), (1.0, 32, True), (1.0, -1, False)],
-)
-def test_sampling_support_replay_enabled_by_bounded_filter(top_p, top_k, expected):
-    args = SimpleNamespace(rollout_top_p=top_p, rollout_top_k=top_k)
-    assert sampling_support_replay_enabled(args) is expected
 
 
 def test_append_sampling_metadata_preserves_ragged_support_and_native_logprobs():

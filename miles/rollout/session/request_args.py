@@ -19,7 +19,6 @@ from miles.rollout.session.config import SessionServerConfig
 from miles.rollout.session.errors import MessageValidationError
 from miles.utils.chat_template_utils.tito_tokenizer import TITOTokenizer, extract_template_args
 from miles.utils.lora import LORA_ADAPTER_NAME, lora_rollout_enabled
-from miles.utils.sampling_mask import sampling_support_replay_enabled
 
 DEFAULT_TURN_ARGS_DROP_KEYS = ("input_ids", "messages")
 
@@ -86,7 +85,7 @@ def resolve_request_args_by_config(
     if sampling_mask_requested is False:
         return_sampling_mask = False
     else:
-        if sampling_support_replay_enabled(config):
+        if config.use_rollout_sampling_mask:
             for name, value in (
                 ("top_p", config.rollout_top_p),
                 ("top_k", config.rollout_top_k),

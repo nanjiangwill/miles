@@ -35,6 +35,7 @@ def make_args(**overrides: Any) -> Namespace:
         rollout_temperature=1.0,
         rollout_top_p=1.0,
         rollout_top_k=-1,
+        use_rollout_sampling_mask=False,
         over_sampling_batch_size=None,
         rollout_global_dataset=False,
         num_rollout=1,

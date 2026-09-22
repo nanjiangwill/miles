@@ -1,7 +1,7 @@
 from argparse import Namespace
 from collections.abc import Mapping, Sequence
 
-from miles.utils.sampling_mask import RolloutSamplingMask, sampling_support_replay_enabled
+from miles.utils.sampling_mask import RolloutSamplingMask
 from miles.utils.types import Sample
 
 
@@ -21,7 +21,7 @@ def should_return_sampling_mask(
     if not 0.0 < request_top_p <= 1.0:
         raise ValueError(f"training request top_p must be in (0, 1], got {request_top_p}")
 
-    if not sampling_support_replay_enabled(args):
+    if not args.use_rollout_sampling_mask:
         raw_top_k = params.get("top_k")
         request_top_k = -1 if raw_top_k is None else int(raw_top_k)
         if request_top_p < 1.0 or request_top_k > 0:

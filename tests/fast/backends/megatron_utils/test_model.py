@@ -74,6 +74,7 @@ def make_train_one_step_args(**overrides: Any) -> Namespace:
         rollout_max_response_len=512,
         enable_witness=False,
         save_local_weight_checksum=False,
+        use_rollout_sampling_mask=False,
     )
     return Namespace(**{**defaults, **overrides})
 

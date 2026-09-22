@@ -28,7 +28,6 @@ from miles.rollout.session.samples.merge import (
     truncate_samples_by_total_tokens,
 )
 from miles.rollout.session.types import GetSessionResponse, SessionRecord
-from miles.utils.sampling_mask import sampling_support_replay_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -214,7 +213,7 @@ class SessionCore:
         # must depend on this capability, never on the weight-update mode.
         self.use_addition_r3 = use_addition_r3
         self.samples_wire_fields = COMPUTED_FIELDS
-        if sampling_support_replay_enabled(config):
+        if config.use_rollout_sampling_mask:
             self.samples_wire_fields += ROLLOUT_SAMPLING_MASK_FIELDS
 
     def _maybe_request_addition_r3(

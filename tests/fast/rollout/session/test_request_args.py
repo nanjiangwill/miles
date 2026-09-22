@@ -39,7 +39,9 @@ class TestResolveRequestArgsByConfig:
         assert wire["return_indexer_topk"] is True
 
     def test_sampling_replay_uses_launch_defaults_without_overwriting_request_filters(self):
-        config = make_session_server_config(rollout_top_p=0.95, rollout_top_k=32, rollout_temperature=0.7)
+        config = make_session_server_config(
+            use_rollout_sampling_mask=True, rollout_top_p=0.95, rollout_top_k=32, rollout_temperature=0.7
+        )
 
         wire, _ = resolve_request_args_by_config({"top_p": 0.8, "custom_params": {"caller_option": "kept"}}, config)
 
@@ -50,7 +52,7 @@ class TestResolveRequestArgsByConfig:
         assert wire["custom_params"] == {"caller_option": "kept"}
 
     def test_sampling_replay_can_be_disabled_per_request(self):
-        config = make_session_server_config(rollout_top_p=0.95, rollout_top_k=32)
+        config = make_session_server_config(use_rollout_sampling_mask=True, rollout_top_p=0.95, rollout_top_k=32)
 
         wire, _ = resolve_request_args_by_config({"return_sampling_mask": False}, config)
 
