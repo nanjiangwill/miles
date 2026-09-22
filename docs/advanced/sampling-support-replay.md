@@ -55,8 +55,9 @@ Miles rejects configurations that it cannot replay faithfully:
   session is created.
 - Request temperature must match the registered training temperature
   (`--rollout-temperature` for the standard rollout paths).
-- Frequency, presence, and repetition penalties and `logit_bias` are not
-  supported because the trainer does not replay those logit transformations.
+- Frequency, presence, and repetition penalties, `logit_bias`, and custom logit
+  processors are not supported because the trainer does not replay those logit
+  transformations.
 - `--recompute-logprobs-via-prefill` is incompatible because that path does not
   preserve the per-token support.
 - The Miles router is currently required as a transport compatibility measure.
@@ -65,33 +66,23 @@ Miles rejects configurations that it cannot replay faithfully:
   capture request. The gateway's non-streaming response path does preserve raw
   response bytes; response stripping is not the issue.
 
-SGLang owns compatibility with custom logit processors and the physical support
-limit. Speculative decoding is not restricted by Miles; it works when the
-SGLang backend returns the same native support and normalized log probability
-for every accepted output token.
+The SGLang backend must return one complete support and its normalized log
+probability for every sampled token. Miles validates that response contract but
+does not add separate restrictions for speculative decoding.
 
-Tool and environment tokens are recorded with singleton support. Multi-turn
-sessions concatenate supports across assistant turns and singleton supports
-across observations, so every response token remains aligned with exactly one
-support. Evaluation requests do not capture this training-only metadata.
+Tool and environment tokens are recorded with singleton support. Evaluation
+requests do not capture this training-only metadata.
 
 ## Current objective limitation
 
-The actor produces full-vocabulary logits, but the current loss interface
-returns one actor score per token. With replay enabled, that score is normalized
-over the captured support for the policy ratio. Reference KL and on-policy
-distillation also need the actor score normalized over the full vocabulary, so
-Miles currently rejects `--use-kl-loss`, nonzero `--kl-coef`, and `--use-opd`
-with replay.
-
-This is an interface limitation, not a mathematical conflict. Both scores can
-be derived from the same actor forward pass once the loss path carries them as
-separate values.
+Replay currently exposes only the support-normalized actor score to the loss.
+Reference KL and on-policy distillation also need a full-vocabulary actor score,
+so Miles rejects `--use-kl-loss`, nonzero `--kl-coef`, and `--use-opd` with
+replay until the loss interface carries both scores.
 
 ## Monitor replay
 
-Track `train/train_rollout_logprob_abs_diff`. On the first update from identical
-rollout and actor weights, the value should be close to the numerical tolerance
-of the two inference paths. Later, it also includes legitimate policy staleness
-and weight updates, so interpret it together with version-lag and clipping
-metrics rather than as a standalone correctness test.
+On the first update from identical weights,
+`train/train_rollout_logprob_abs_diff` should be near numerical tolerance.
+Afterward, interpret it with version-lag and clipping metrics because it also
+reflects policy updates and staleness.
