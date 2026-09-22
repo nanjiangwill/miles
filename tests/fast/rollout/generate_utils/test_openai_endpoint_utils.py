@@ -64,6 +64,7 @@ async def test_create_reads_session_server_instance_id_from_args(monkeypatch, cr
     args = SimpleNamespace(
         session_server_addrs=["127.0.0.1:12345"],
         session_server_instance_ids={"127.0.0.1:12345": "server-instance-123"},
+        use_sampling_support_replay=expected_payload.get("top_p", 1.0) < 1.0 or expected_payload.get("top_k", -1) > 0,
         rollout_temperature=expected_payload.get("temperature", 1.0),
         rollout_top_p=expected_payload.get("top_p", 1.0),
         rollout_top_k=expected_payload.get("top_k", -1),
@@ -84,7 +85,10 @@ async def test_create_without_instance_id_on_args(monkeypatch):
 
     monkeypatch.setattr("miles.rollout.generate_utils.openai_endpoint_utils.post", fake_post)
 
-    args = SimpleNamespace(session_server_addrs=["127.0.0.1:12345"])
+    args = SimpleNamespace(
+        session_server_addrs=["127.0.0.1:12345"],
+        use_sampling_support_replay=False,
+    )
     tracer = await OpenAIEndpointTracer.create(args)
 
     assert tracer.session_server_instance_id is None
@@ -111,7 +115,10 @@ async def test_create_distributes_sessions_across_port_range(monkeypatch):
     monkeypatch.setattr("miles.rollout.generate_utils.openai_endpoint_utils.post_bytes_no_retry", fake_post_bytes)
 
     ports = [12345, 12346, 12347, 12348]
-    args = SimpleNamespace(session_server_addrs=[f"127.0.0.1:{port}" for port in ports])
+    args = SimpleNamespace(
+        session_server_addrs=[f"127.0.0.1:{port}" for port in ports],
+        use_sampling_support_replay=False,
+    )
 
     chosen_ports = set()
     for _ in range(32):
@@ -150,6 +157,7 @@ class TestOpenAIEndpointTracerCreate:
         args = SimpleNamespace(
             session_server_addrs=["10.0.0.1:5005", "10.0.0.2:5005"],
             session_server_instance_ids={"10.0.0.1:5005": "instance-a", "10.0.0.2:5005": "instance-b"},
+            use_sampling_support_replay=False,
         )
         tracer = await OpenAIEndpointTracer.create(args)
 
@@ -186,6 +194,7 @@ class TestOpenAIEndpointTracerCreate:
         monkeypatch.setattr("miles.rollout.generate_utils.openai_endpoint_utils.post", fake_post)
         args = SimpleNamespace(
             session_server_addrs=["127.0.0.1:12345"],
+            use_sampling_support_replay=True,
             rollout_temperature=1.0,
             rollout_top_p=0.95,
             rollout_top_k=32,
@@ -389,6 +398,7 @@ async def test_create_selects_wire_fields_by_session_server_version(monkeypatch)
         return SimpleNamespace(
             session_server_addrs=["127.0.0.1:7000"],
             use_session_server=version,
+            use_sampling_support_replay=top_p < 1.0 or top_k > 0,
             rollout_temperature=1.0,
             rollout_top_p=top_p,
             rollout_top_k=top_k,

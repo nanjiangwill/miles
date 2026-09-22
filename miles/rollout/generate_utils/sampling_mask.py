@@ -1,7 +1,7 @@
 from argparse import Namespace
 from collections.abc import Mapping, Sequence
 
-from miles.utils.sampling_mask import RolloutSamplingMask, sampling_support_replay_enabled
+from miles.utils.sampling_mask import RolloutSamplingMask
 from miles.utils.types import Sample
 
 
@@ -18,7 +18,7 @@ def should_return_sampling_mask(
     params = sampling_params or {}
     return validate_sampling_support_request(
         params,
-        replay_enabled=sampling_support_replay_enabled(args),
+        replay_enabled=args.use_sampling_support_replay,
         expected_temperature=float(getattr(args, "rollout_temperature", 1.0)),
     )
 
@@ -63,6 +63,7 @@ def validate_sampling_support_request(
         "presence_penalty": (0, 0.0, None),
         "repetition_penalty": (1, 1.0, None),
         "logit_bias": ({}, None),
+        "custom_logit_processor": (None,),
     }
     for name, allowed_values in unsupported.items():
         if sampling_params.get(name) not in allowed_values:

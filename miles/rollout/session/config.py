@@ -1,7 +1,6 @@
 from typing import Any
 
 from miles.utils.pydantic_utils import FrozenStrictBaseModel
-from miles.utils.sampling_mask import sampling_support_replay_enabled
 
 
 class SessionServerConfig(FrozenStrictBaseModel):
@@ -46,7 +45,7 @@ def compute_session_server_config(
         apply_chat_template_kwargs=args.apply_chat_template_kwargs,
         use_rollout_routing_replay=args.use_rollout_routing_replay,
         use_rollout_indexer_replay=args.use_rollout_indexer_replay,
-        use_sampling_support_replay=sampling_support_replay_enabled(args),
+        use_sampling_support_replay=args.use_sampling_support_replay,
         sglang_speculative_algorithm=args.sglang_speculative_algorithm,
         num_layers=getattr(args, "num_layers", None),
         moe_router_topk=getattr(args, "moe_router_topk", None),

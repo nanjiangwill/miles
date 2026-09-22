@@ -36,20 +36,19 @@ def test_fsdp_train_debug_rollout_only_returns_a_normal_output(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("model_tag", "store_prefix", "top_p", "top_k", "expected"),
+    ("model_tag", "store_prefix", "use_sampling_support_replay", "expected"),
     [
-        ("actor", "", 0.95, 32, True),
-        ("ref", "ref_", 0.95, 32, False),
-        ("actor", "", 1.0, -1, False),
+        ("actor", "", True, True),
+        ("ref", "ref_", True, False),
+        ("actor", "", False, False),
     ],
 )
 def test_fsdp_only_actor_scores_replay_rollout_sampling_support(
-    monkeypatch, model_tag, store_prefix, top_p, top_k, expected
+    monkeypatch, model_tag, store_prefix, use_sampling_support_replay, expected
 ):
     actor = object.__new__(actor_module.FSDPTrainRayActor)
     actor.args = Namespace(
-        rollout_top_p=top_p,
-        rollout_top_k=top_k,
+        use_sampling_support_replay=use_sampling_support_replay,
         data_pad_size_multiplier=1,
         qkv_format="thd",
     )

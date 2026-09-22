@@ -16,6 +16,7 @@ _ARGS_TO_CONFIG_FIELD = {
     "apply_chat_template_kwargs": "apply_chat_template_kwargs",
     "use_rollout_routing_replay": "use_rollout_routing_replay",
     "use_rollout_indexer_replay": "use_rollout_indexer_replay",
+    "use_sampling_support_replay": "use_sampling_support_replay",
     "sglang_speculative_algorithm": "sglang_speculative_algorithm",
     "num_layers": "num_layers",
     "moe_router_topk": "moe_router_topk",
@@ -31,8 +32,6 @@ _ARGS_TO_CONFIG_FIELD = {
 }
 
 _CALL_SITE_FIELDS = ("host", "port", "instance_id", "backend_url")
-_DERIVED_FIELDS = ("use_sampling_support_replay",)
-
 _OPTIONAL_ARGS_ATTRS = (
     "num_layers",
     "pause_generation_mode",
@@ -50,7 +49,7 @@ _DISTINCT_ARGS_VALUES = dict(
     apply_chat_template_kwargs={"enable_thinking": True},
     use_rollout_routing_replay=True,
     use_rollout_indexer_replay=True,
-    rollout_top_p=0.95,
+    use_sampling_support_replay=True,
     sglang_speculative_algorithm="EAGLE",
     num_layers=61,
     moe_router_topk=8,
@@ -75,7 +74,7 @@ def _make_args(**overrides) -> Namespace:
 class TestComputeSessionServerConfig:
     def test_every_config_field_has_a_known_source(self):
         """Adding a config field without extending this test's mapping must fail here."""
-        covered = set(_CALL_SITE_FIELDS) | set(_ARGS_TO_CONFIG_FIELD.values()) | set(_DERIVED_FIELDS)
+        covered = set(_CALL_SITE_FIELDS) | set(_ARGS_TO_CONFIG_FIELD.values())
         assert covered == set(SessionServerConfig.model_fields)
 
     def test_call_site_fields_are_copied(self):
@@ -95,20 +94,6 @@ class TestComputeSessionServerConfig:
             _make_args(), host="10.0.0.1", port=5001, instance_id="abc", backend_url="http://10.0.0.2:3000"
         )
         assert getattr(config, config_field) == _DISTINCT_ARGS_VALUES[args_attr]
-
-    @pytest.mark.parametrize(
-        ("top_p", "top_k", "expected"),
-        [(0.95, -1, True), (1.0, 32, True), (1.0, -1, False)],
-    )
-    def test_sampling_support_replay_is_derived_from_rollout_sampling(self, top_p, top_k, expected):
-        config = compute_session_server_config(
-            _make_args(rollout_top_p=top_p, rollout_top_k=top_k),
-            host="10.0.0.1",
-            port=5001,
-            instance_id="abc",
-            backend_url="http://10.0.0.2:3000",
-        )
-        assert config.use_sampling_support_replay is expected
 
     @pytest.mark.parametrize("flag_value", [True, False])
     def test_a_boolean_session_server_flag_reaches_the_config_unchanged(self, flag_value: bool):
