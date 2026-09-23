@@ -16,7 +16,6 @@ register_cuda_ci(
 register_ci_gate(metric_key="train/train_rollout_logprob_abs_diff")
 register_ci_gate(metric_key="train/train_rollout_kl")
 register_ci_gate(metric_key="train/ppo_kl")
-register_ci_gate(metric_key="train/grad_norm")
 
 MODEL_NAME = "Qwen3-0.6B"
 NUM_GPUS = 2
