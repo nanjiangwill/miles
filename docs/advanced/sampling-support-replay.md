@@ -31,7 +31,6 @@ ROLLOUT_ARGS+=(
   --rollout-temperature 1.0
   --rollout-top-p 0.95
   --rollout-top-k 64
-  --use-miles-router
 )
 ```
 
@@ -60,11 +59,9 @@ Miles rejects configurations that it cannot replay faithfully:
   transformations.
 - `--recompute-logprobs-via-prefill` is incompatible because that path does not
   preserve the per-token support.
-- The Miles router is currently required as a transport compatibility measure.
-  The SGLang v0.5.20 gateway deserializes chat requests through a typed schema
-  that does not retain `return_sampling_mask`, so the engine never receives the
-  capture request. The gateway's non-streaming response path does preserve raw
-  response bytes; response stripping is not the issue.
+- The selected router must preserve `return_sampling_mask`. The Miles router
+  forwards raw request bodies. The native SGLang router requires typed chat and
+  generate request schemas that declare the field.
 
 The SGLang backend must return one complete support and its normalized log
 probability for every sampled token. Miles validates that response contract but

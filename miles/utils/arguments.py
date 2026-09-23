@@ -2973,12 +2973,6 @@ def miles_validate_args(args):
                 "sampling-support replay cannot be combined with --recompute-logprobs-via-prefill; "
                 "prefill scoring does not preserve the rollout sampling support"
             )
-        if not args.use_miles_router:
-            raise ValueError(
-                "sampling-support replay currently requires --use-miles-router; "
-                "the SGLang v0.5.20 gateway's typed request schema drops "
-                "return_sampling_mask before forwarding the request"
-            )
         if args.kl_coef != 0 or args.use_kl_loss or args.use_opd:
             # The actor still produces full-vocabulary logits, but replay currently exposes only the
             # support-normalized actor score to the loss. These objectives can be enabled once the loss

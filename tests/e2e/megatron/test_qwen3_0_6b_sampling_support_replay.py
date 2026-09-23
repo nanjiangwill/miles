@@ -78,7 +78,6 @@ def execute() -> None:
         "--rollout-num-gpus-per-engine 2 "
         "--sglang-mem-fraction-static 0.7 "
         "--sglang-decode-log-interval 1000 "
-        "--use-miles-router "
     )
 
     train_args = (

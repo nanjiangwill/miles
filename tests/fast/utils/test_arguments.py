@@ -311,15 +311,10 @@ def test_recompute_logprobs_via_prefill_flag_is_parsed():
                 "0.95",
                 "--rollout-top-k",
                 "32",
-                "--use-miles-router",
                 "--true-on-policy-mode",
                 "--recompute-logprobs-via-prefill",
             ],
             "sampling-support replay cannot be combined with --recompute-logprobs-via-prefill",
-        ),
-        (
-            ["--rollout-top-p", "0.95", "--rollout-top-k", "32"],
-            "currently requires --use-miles-router",
         ),
         (
             [
@@ -327,7 +322,6 @@ def test_recompute_logprobs_via_prefill_flag_is_parsed():
                 "0.95",
                 "--rollout-top-k",
                 "32",
-                "--use-miles-router",
                 "--kl-coef",
                 "0.1",
             ],
@@ -339,7 +333,6 @@ def test_recompute_logprobs_via_prefill_flag_is_parsed():
                 "0.95",
                 "--rollout-top-k",
                 "32",
-                "--use-miles-router",
                 "--use-kl-loss",
             ],
             "cannot currently be combined with reference KL or teacher distillation",
@@ -350,7 +343,6 @@ def test_recompute_logprobs_via_prefill_flag_is_parsed():
                 "0.95",
                 "--rollout-top-k",
                 "32",
-                "--use-miles-router",
                 "--use-opd",
             ],
             "cannot currently be combined with reference KL or teacher distillation",
@@ -370,8 +362,8 @@ def test_sampling_support_arguments_fail_closed(extra, message):
     ("sampling_args", "expected"),
     [
         ([], False),
-        (["--rollout-top-k", "32", "--use-miles-router"], True),
-        (["--rollout-top-p", "0.95", "--rollout-top-k", "32", "--use-miles-router"], True),
+        (["--rollout-top-k", "32"], True),
+        (["--rollout-top-p", "0.95", "--rollout-top-k", "32"], True),
     ],
 )
 def test_sampling_support_replay_is_derived_from_rollout_filters(sampling_args, expected):
