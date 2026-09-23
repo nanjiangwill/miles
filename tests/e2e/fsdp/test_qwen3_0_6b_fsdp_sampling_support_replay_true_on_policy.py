@@ -11,8 +11,8 @@ register_cuda_ci(
     labels=["fsdp", "sglang", "replay"],
     hardware=["hopper"],
 )
-# Under true-on-policy the log-prob diff and both KLs stay at 0. ppo_kl compares the training
-# forward with forward-only scoring, so it also covers the replay mask on the loss path.
+# The log-prob diff and both KLs stay at 0 under true-on-policy; a bf16 flip (see execute) adds only about 2e-7 to
+# the diff. ppo_kl compares the training forward with forward-only scoring, so it also covers the loss-path mask.
 register_ci_gate(metric_key="train/train_rollout_logprob_abs_diff")
 register_ci_gate(metric_key="train/train_rollout_kl")
 register_ci_gate(metric_key="train/ppo_kl")
@@ -30,9 +30,9 @@ def prepare() -> None:
 def execute() -> None:
     ckpt_args = f"--hf-checkpoint /root/models/{MODEL_NAME} "
 
-    # Bounded top-p/top-k enables sampling-support replay. Under true-on-policy the actor's
-    # support-normalized log-probs must equal the rollout's exactly; --ci-test asserts this on
-    # every rollout step.
+    # Top-p/top-k enables sampling-support replay; --ci-test asserts log_probs == rollout_log_probs on every rollout.
+    # Equality holds only through bf16 rounding: SGLang's fp32 log(p / sum_S p) and the trainer's masked bf16
+    # log_softmax differ by one ulp on ~4.6e-6 of sampled tokens, which rarely moves the bf16 per-sample sums checked.
     rollout_args = (
         "--prompt-data /root/datasets/gsm8k/train.parquet "
         "--input-key messages "
