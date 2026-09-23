@@ -9,15 +9,30 @@ def get_rollout_sampling_masks(batch: Mapping[str, object]) -> list[RolloutSampl
     """Reconstruct the per-sample masks carried by the training-data wire."""
     ids_batch = batch.get("rollout_sampling_mask_ids")
     offsets_batch = batch.get("rollout_sampling_mask_offsets")
+    support_logprobs_batch = batch.get("rollout_sampling_support_logprobs")
     if ids_batch is None or offsets_batch is None:
         raise ValueError("sampling-support actor scoring requires both sampling-mask wire fields")
     if not isinstance(ids_batch, Sequence) or not isinstance(offsets_batch, Sequence):
         raise TypeError("rollout sampling-mask ids and offsets must be sequences with one entry per sample")
     if len(ids_batch) != len(offsets_batch):
         raise ValueError(f"sampling-mask ids batch size {len(ids_batch)} != offsets batch size {len(offsets_batch)}")
+    if support_logprobs_batch is not None:
+        if not isinstance(support_logprobs_batch, Sequence):
+            raise TypeError("rollout sampling-support logprobs must be a sequence with one entry per sample")
+        if len(support_logprobs_batch) != len(ids_batch):
+            raise ValueError(
+                f"sampling-support logprobs batch size {len(support_logprobs_batch)} "
+                f"!= ids batch size {len(ids_batch)}"
+            )
+    else:
+        support_logprobs_batch = [None] * len(ids_batch)
     return [
-        RolloutSamplingMask(ids=torch.as_tensor(ids), offsets=torch.as_tensor(offsets))
-        for ids, offsets in zip(ids_batch, offsets_batch, strict=True)
+        RolloutSamplingMask(
+            ids=torch.as_tensor(ids),
+            offsets=torch.as_tensor(offsets),
+            support_logprobs=(None if support_logprobs is None else torch.as_tensor(support_logprobs)),
+        )
+        for ids, offsets, support_logprobs in zip(ids_batch, offsets_batch, support_logprobs_batch, strict=True)
     ]
 
 

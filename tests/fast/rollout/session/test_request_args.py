@@ -149,6 +149,45 @@ class TestPrepareChatRequest:
                 turn_args=None,
             )
 
+    def test_score_centering_requests_the_existing_sampler_head(self):
+        prepared = prepare_chat_request(
+            {},
+            self._tito(),
+            config=make_session_server_config(use_score_centering=True, score_centering_head_size=64),
+            turn_args=None,
+        )
+
+        assert prepared.body["top_logprobs"] == 64
+        assert "return_sampling_support_logprobs" not in prepared.body
+
+    def test_score_centering_with_replay_requests_the_full_behavior_distribution(self):
+        prepared = prepare_chat_request(
+            {},
+            self._tito(),
+            config=make_session_server_config(
+                use_sampling_support_replay=True,
+                use_score_centering=True,
+                rollout_temperature=0.7,
+            ),
+            turn_args=None,
+            sampling_defaults={"temperature": 0.7, "top_p": 0.95, "top_k": 32},
+            sampling_support_replay=True,
+        )
+
+        assert prepared.body["return_sampling_mask"] is True
+        assert prepared.body["return_sampling_support_logprobs"] is True
+        assert "top_logprobs" not in prepared.body
+
+    @pytest.mark.parametrize(("name", "value"), [("regex", "[a-z]+"), ("min_tokens", 3)])
+    def test_score_centering_validation_is_a_client_error(self, name, value):
+        with pytest.raises(MessageValidationError, match=name):
+            prepare_chat_request(
+                {name: value},
+                self._tito(),
+                config=make_session_server_config(use_score_centering=True),
+                turn_args=None,
+            )
+
     @pytest.mark.parametrize("client_tools", [None, [], [{"function": {"name": "override"}}]])
     def test_launch_tools_stay_top_level_and_client_tools_override_them(self, client_tools):
         launch_kwargs = {**self.LAUNCH, "tools": self.TOOLS}
@@ -289,6 +328,26 @@ def test_eval_keeps_sampling_resolution_and_overrides_model_replay(sampling):
     )
     assert "routed_experts_start_len" not in prepared.body
     assert client_args == original and history == original_history
+
+
+def test_eval_disables_model_score_centering_outputs():
+    class Model(TITOTokenizer):
+        def resolve_request_args(self, request_args, *, turn_args):
+            request_args = super().resolve_request_args(request_args, turn_args=turn_args)
+            request_args.update(
+                return_sampling_support_logprobs=True,
+            )
+            return request_args
+
+    prepared = prepare_chat_request(
+        {},
+        Model(MagicMock()),
+        config=make_session_server_config(use_score_centering=True),
+        turn_args=None,
+        evaluation=True,
+    )
+
+    assert prepared.body["return_sampling_support_logprobs"] is False
 
 
 @pytest.mark.parametrize("evaluation", [False, True])

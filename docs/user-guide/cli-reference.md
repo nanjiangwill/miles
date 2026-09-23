@@ -82,6 +82,8 @@ then push up until you OOM.
 | `--rollout-temperature` | `1.0` | Sampling temperature. |
 | `--rollout-top-p` | `1.0` | Top-p truncation. Values below `1` enable [sampling-support replay](/advanced/sampling-support-replay) and require a positive top-k. |
 | `--rollout-top-k` | `-1` | Top-k truncation. Positive values enable [sampling-support replay](/advanced/sampling-support-replay). |
+| `--use-score-centering` | off | Enable the [score-centered](/advanced/score-centering) off-policy policy-gradient estimator. |
+| `--score-centering-head-size` | `128` | Sampler probability-head size for modeled-tail score centering; this does not truncate sampling. |
 | `--rollout-max-response-len` | `–` | Max tokens per response. |
 | `--rollout-stop-token-ids` | model default | Stop token IDs. Override when generations don't stop. |
 | `--apply-chat-template` | off | Apply the tokenizer's chat template. |

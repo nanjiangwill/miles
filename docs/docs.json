@@ -221,6 +221,7 @@
        "advanced/int4-qat",
        "advanced/speculative-decoding",
        "advanced/sampling-support-replay",
+       "advanced/score-centering",
        "advanced/lora",
        "advanced/on-policy-distillation"
       ]

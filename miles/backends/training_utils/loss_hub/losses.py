@@ -20,6 +20,7 @@ from miles.backends.training_utils.loss_hub.math_utils import (
 )
 from miles.backends.training_utils.parallel import get_parallel_state
 from miles.backends.training_utils.sampling_mask import get_rollout_sampling_masks
+from miles.backends.training_utils.score_centering import compute_score_centering_terms
 from miles.utils.function_registry import load_function
 from miles.utils.types import RolloutBatch
 
@@ -90,6 +91,9 @@ def policy_loss_function(
         "tis", "ois", "tis_clipfrac" are included when the respective features
         are enabled.
     """
+    if getattr(args, "use_score_centering", False):
+        return _score_centering_policy_loss(args, batch, logits, sum_of_sample_mean)
+
     parallel_state = get_parallel_state()
     advantages_list = [advantage.detach() for advantage in batch["advantages"]]
     advantages = torch.cat(advantages_list, dim=0)
@@ -396,6 +400,147 @@ def policy_loss_function(
         opd_reverse_kl = torch.cat(batch["opd_reverse_kl"], dim=0)
         reported_loss["opd_reverse_kl"] = sum_of_sample_mean(opd_reverse_kl).clone().detach()
 
+    return loss, reported_loss
+
+
+def _score_centering_policy_loss(
+    args: Namespace,
+    batch: RolloutBatch,
+    logits: torch.Tensor,
+    sum_of_sample_mean: Callable[[torch.Tensor], torch.Tensor],
+) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    """Compute the paper's centered REINFORCE estimator without PPO clipping."""
+    total_lengths = batch["total_lengths"]
+    response_lengths = batch["response_lengths"]
+    max_seq_lens = batch.get("max_seq_lens")
+    score_terms = compute_score_centering_terms(logits, args=args, batch=batch)
+
+    trainer_token_logprobs = torch.cat(score_terms["trainer_token_logprobs"])
+    sampler_token_logprobs = torch.cat(score_terms["sampler_token_logprobs"]).detach()
+    logprob_corrections = torch.cat(score_terms["logprob_corrections"])
+    sampled_token_weights = torch.cat(score_terms["sampled_token_weights"]).detach()
+    advantages = torch.cat([advantage.detach() for advantage in batch["advantages"]])
+    local_loss_masks = get_local_response_loss_masks(
+        total_lengths,
+        response_lengths,
+        batch["loss_masks"],
+        args.qkv_format,
+        max_seq_lens,
+    )
+    local_loss_mask = torch.cat(local_loss_masks).to(device=trainer_token_logprobs.device)
+    active_tokens = local_loss_mask.bool()
+
+    ppo_kl = sampler_token_logprobs - trainer_token_logprobs
+    ppo_kl = torch.where(
+        active_tokens,
+        torch.nan_to_num(ppo_kl, nan=0.0, posinf=0.0, neginf=0.0),
+        ppo_kl.new_zeros(()),
+    )
+    advantages = torch.where(
+        active_tokens,
+        torch.nan_to_num(advantages, nan=0.0, posinf=0.0, neginf=0.0),
+        advantages.new_zeros(()),
+    )
+    pg_loss_tokens = -advantages * (sampled_token_weights * trainer_token_logprobs - logprob_corrections)
+    pg_loss_tokens = torch.where(
+        active_tokens,
+        torch.nan_to_num(pg_loss_tokens, nan=0.0, posinf=0.0, neginf=0.0),
+        pg_loss_tokens.new_zeros(()),
+    )
+    pg_loss = sum_of_sample_mean(pg_loss_tokens)
+    loss = pg_loss
+
+    entropy_loss = pg_loss.new_zeros(())
+    calculate_entropy = args.entropy_coef != 0 or args.observe_training_entropy
+    if calculate_entropy:
+        rollout_sampling_mask = get_rollout_sampling_masks(batch) if args.use_sampling_support_replay else None
+        entropy_result = get_log_probs_and_entropy(
+            logits,
+            args=args,
+            unconcat_tokens=batch["unconcat_tokens"],
+            total_lengths=total_lengths,
+            response_lengths=response_lengths,
+            with_entropy=True,
+            entropy_requires_grad=args.entropy_coef != 0,
+            max_seq_lens=max_seq_lens,
+            rollout_sampling_mask=rollout_sampling_mask,
+        )
+        entropy_loss = sum_of_sample_mean(torch.cat(entropy_result["entropy"]))
+        if args.entropy_coef != 0:
+            loss = loss - args.entropy_coef * entropy_loss
+        else:
+            entropy_loss = entropy_loss.detach()
+
+    reported_loss = {
+        "loss": loss.detach().clone(),
+        "pg_loss": pg_loss.detach().clone(),
+        "entropy_loss": entropy_loss.detach().clone(),
+        "pg_clipfrac": pg_loss.new_zeros(()),
+        "ppo_kl": sum_of_sample_mean(ppo_kl).detach().clone(),
+        "score_centering_sampler_head_mass": sum_of_sample_mean(torch.cat(score_terms["sampler_head_mass"]))
+        .detach()
+        .clone(),
+        "score_centering_trainer_head_mass": sum_of_sample_mean(torch.cat(score_terms["trainer_head_mass"]))
+        .detach()
+        .clone(),
+        "score_centering_sampled_token_weight": sum_of_sample_mean(sampled_token_weights).detach().clone(),
+    }
+
+    effective_ppo_kl = -torch.where(
+        sampled_token_weights > 0,
+        sampled_token_weights.log(),
+        sampled_token_weights.new_full((), float("inf")),
+    )
+    reported_loss["ess_ratio"] = compute_ess_ratio_contribution(
+        ppo_kl=effective_ppo_kl,
+        loss_masks=batch["loss_masks"],
+        total_lengths=total_lengths,
+        response_lengths=response_lengths,
+        qkv_format=args.qkv_format,
+        max_seq_lens=max_seq_lens,
+        calculate_per_token_loss=args.calculate_per_token_loss,
+    ).squeeze()
+
+    if args.use_tis:
+        ois = (-ppo_kl).exp()
+        reported_loss["ois"] = sum_of_sample_mean(ois).detach().clone()
+        reported_loss["tis"] = sum_of_sample_mean(sampled_token_weights).detach().clone()
+        reported_loss["tis_abs"] = sum_of_sample_mean((sampled_token_weights - 1).abs()).detach().clone()
+        reported_loss["tis_clipfrac"] = (
+            sum_of_sample_mean((sampled_token_weights != ois).to(trainer_token_logprobs.dtype)).detach().clone()
+        )
+
+    if args.use_kl_loss:
+        reference_log_probs = batch.get("ref_log_probs")
+        if reference_log_probs is None:
+            raise ValueError("ref_log_probs must be provided when --use-kl-loss is set")
+        ref_log_probs = torch.cat([value.detach() for value in reference_log_probs])
+        kl = compute_approx_kl(trainer_token_logprobs, ref_log_probs, kl_loss_type=args.kl_loss_type)
+        kl = torch.where(
+            active_tokens,
+            torch.nan_to_num(kl, nan=0.0, posinf=0.0, neginf=0.0),
+            kl.new_zeros(()),
+        )
+        kl_loss = sum_of_sample_mean(kl)
+        if args.kl_loss_coef != 0:
+            loss = loss + args.kl_loss_coef * kl_loss
+            reported_loss["loss"] = loss.detach().clone()
+        reported_loss["kl_loss"] = kl_loss.detach().clone()
+
+    abs_diff = (trainer_token_logprobs.detach() - sampler_token_logprobs).abs()
+    abs_diff = torch.where(active_tokens, abs_diff, abs_diff.new_zeros(()))
+    reported_loss["train_rollout_logprob_abs_diff"] = sum_of_sample_mean(abs_diff).detach().clone()
+    rollout_train_kl = compute_approx_kl(
+        sampler_token_logprobs,
+        trainer_token_logprobs.detach(),
+        kl_loss_type="low_var_kl",
+    )
+    rollout_train_kl = torch.where(active_tokens, rollout_train_kl, rollout_train_kl.new_zeros(()))
+    reported_loss["train_rollout_kl"] = sum_of_sample_mean(rollout_train_kl).detach().clone()
+
+    if trainer_token_logprobs.numel() == 0:
+        loss = loss + 0 * logits.sum(dtype=torch.float32)
+        reported_loss["loss"] = loss.detach().clone()
     return loss, reported_loss
 
 

@@ -214,6 +214,20 @@ def test_append_sampling_metadata_rejects_support_without_sampled_token():
         )
 
 
+def test_append_sampling_metadata_rejects_inconsistent_selected_logprob():
+    with pytest.raises(ValueError, match="selected-token sampling logprob"):
+        append_sampling_metadata(
+            Sample(),
+            [10],
+            {
+                "output_token_sampling_mask": [[10, 4]],
+                "output_token_sampling_support_logprobs": [[-0.4, -1.1096329]],
+                "output_token_sampling_logprobs": [-0.5],
+            },
+            require_support_logprobs=True,
+        )
+
+
 def test_abort_before_sampling_does_not_require_sampling_metadata():
     sample = Sample()
 

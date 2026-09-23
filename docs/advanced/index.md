@@ -7,7 +7,8 @@ This section covers the Miles features that the Core-features section of the
 homepage points at: low-precision training (FP8 / MXFP8 / NVFP4 / INT4 QAT),
 Rollout Routing Replay for MoE, fast weight updates over P2P RDMA,
 disaggregated RL rollout through an external service, fault tolerance,
-speculative decoding, sampling-support replay, and LoRA training and serving.
+speculative decoding, sampling-support replay, score centering, and LoRA
+training and serving.
 
 <CardGroup cols={2}>
 
@@ -42,6 +43,13 @@ speculative decoding, sampling-support replay, and LoRA training and serving.
 
     Preserve top-p and top-k rollout probabilities when the actor recomputes
     token log probabilities for training.
+
+  </Card>
+
+  <Card title="Score Centering" icon="scale-balanced" href="/advanced/score-centering">
+
+    Remove off-policy score drift with an additive correction derived from the
+    sampler's token probabilities.
 
   </Card>
 

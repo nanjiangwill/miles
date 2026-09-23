@@ -423,6 +423,17 @@ def run_forward_backward_pass(
         if args.use_sampling_support_replay and args.loss_type == "policy_loss"
         else ()
     )
+    score_centering_keys = ()
+    if getattr(args, "use_score_centering", False):
+        score_centering_keys = (
+            ("rollout_sampling_support_logprobs",)
+            if args.use_sampling_support_replay
+            else (
+                "rollout_score_centering_head_ids",
+                "rollout_score_centering_head_offsets",
+                "rollout_score_centering_head_logprobs",
+            )
+        )
 
     @dumper_phase_util.wrap_forward_step
     def forward_step(data_iterator: DataIterator, model: GPTModel, return_schedule_plan: bool = False) -> tuple[
@@ -465,6 +476,7 @@ def run_forward_backward_pass(
                 "target_tokens",
                 "sample_indices",
                 *sampling_mask_keys,
+                *score_centering_keys,
             ],
             args.data_pad_size_multiplier,
             args.qkv_format,

@@ -15,7 +15,7 @@ filters. Miles transports this ragged support with the sample and applies it to
 the actor logits before the softmax:
 
 $$
-q_\theta(a_t \mid S_t) =
+p_\theta(a_t \mid S_t) =
 \frac{\exp(z_\theta(a_t) / T)}
 {\sum_{j \in S_t} \exp(z_\theta(j) / T)}.
 $$
@@ -38,7 +38,9 @@ Replay is enabled whenever `--rollout-top-p` is below `1` or
 `--rollout-top-k` is positive. A finite top-p run must also set a positive
 top-k so that the captured support is bounded. Miles asks SGLang to capture its
 native sampling support with `return_sampling_mask` and uses the returned
-support-normalized log probability as the rollout log probability.
+selected-token, support-normalized log probability as the behavior-policy
+log probability. Score centering additionally requests the sampler probability
+for every support token; see [Score Centering](/advanced/score-centering).
 
 `--rollout-top-k` is the default for rollout requests, not a global upper bound
 on request-specific top-k values. SGLang owns support capacity through

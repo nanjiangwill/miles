@@ -21,13 +21,19 @@ from miles.rollout.session.config import SessionServerConfig
 from miles.rollout.session.errors import SessionNotFoundError, TokenizationError, UpstreamResponseError
 from miles.rollout.session.linear_trajectory import SessionRegistry
 from miles.rollout.session.request_args import filter_turn_args, parse_chat_request
-from miles.rollout.session.samples.codec import COMPUTED_FIELDS, ROLLOUT_SAMPLING_MASK_FIELDS, encode_samples
+from miles.rollout.session.samples.codec import (
+    COMPUTED_FIELDS,
+    ROLLOUT_SAMPLING_MASK_FIELDS,
+    ROLLOUT_SCORE_CENTERING_FIELDS,
+    encode_samples,
+)
 from miles.rollout.session.samples.merge import (
     compute_samples_from_openai_records,
     merge_samples_with_addition_r3,
     truncate_samples_by_total_tokens,
 )
 from miles.rollout.session.types import GetSessionResponse, SessionRecord
+from miles.utils.score_centering import score_centering_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +78,7 @@ _CLIENT_STRIPPED_META_KEYS = (
     "routed_experts",
     "indexer_topk",
     "output_token_sampling_mask",
+    "output_token_sampling_support_logprobs",
     "output_token_sampling_logprobs",
     "output_token_sampling_mask_length",
 )
@@ -282,6 +289,8 @@ class SessionCore:
         fields = COMPUTED_FIELDS
         if session.sampling_support_replay:
             fields += ROLLOUT_SAMPLING_MASK_FIELDS
+        elif score_centering_enabled(self.config) and not session.evaluation:
+            fields += ROLLOUT_SCORE_CENTERING_FIELDS
         if not session.records:
             return _samples_response(encode_samples([], metadata, empty_reason="no_records", fields=fields))
         try:

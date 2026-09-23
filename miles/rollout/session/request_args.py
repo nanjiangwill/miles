@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from miles.rollout.generate_utils.sampling_mask import validate_sampling_support_request
+from miles.rollout.generate_utils.score_centering import score_centering_request_fields
 from miles.rollout.session.config import SessionServerConfig
 from miles.rollout.session.errors import MessageValidationError
 from miles.utils.chat_template_utils.tito_tokenizer import TITOTokenizer, extract_template_args
@@ -73,7 +74,12 @@ def prepare_chat_request(
         raise MessageValidationError(str(e)) from e
     if evaluation:
         # Model rules must not re-enable training replay outputs for evaluation.
-        request_args.update(return_sampling_mask=False, return_routed_experts=False, return_indexer_topk=False)
+        request_args.update(
+            return_sampling_mask=False,
+            return_sampling_support_logprobs=False,
+            return_routed_experts=False,
+            return_indexer_topk=False,
+        )
         request_args.pop("routed_experts_start_len", None)
     else:
         try:
@@ -88,6 +94,18 @@ def prepare_chat_request(
             request_args["return_sampling_mask"] = True
         else:
             request_args.pop("return_sampling_mask", None)
+        try:
+            score_centering_fields = score_centering_request_fields(
+                config,
+                request_args,
+                evaluation=False,
+                openai=True,
+            )
+        except ValueError as e:
+            raise MessageValidationError(str(e)) from e
+        if score_centering_fields.get("return_sampling_support_logprobs") and not return_sampling_mask:
+            raise MessageValidationError("score centering with sampling replay requires return_sampling_mask")
+        request_args.update(score_centering_fields)
     return PreparedChatRequest(
         body=request_args, template_args=extract_template_args(request_args), client_stream=client_stream
     )
