@@ -72,6 +72,7 @@ def make_train_one_step_args(**overrides: Any) -> Namespace:
         ci_test=False,
         enable_mtp_training=False,
         rollout_max_response_len=512,
+        use_sampling_support_replay=False,
         enable_witness=False,
         save_local_weight_checksum=False,
     )
