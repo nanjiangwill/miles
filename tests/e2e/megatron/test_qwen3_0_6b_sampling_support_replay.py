@@ -75,9 +75,7 @@ def execute() -> None:
     )
 
     sglang_args = (
-        "--rollout-num-gpus-per-engine 2 "
-        "--sglang-mem-fraction-static 0.7 "
-        "--sglang-decode-log-interval 1000 "
+        "--rollout-num-gpus-per-engine 2 " "--sglang-mem-fraction-static 0.7 " "--sglang-decode-log-interval 1000 "
     )
 
     train_args = (
