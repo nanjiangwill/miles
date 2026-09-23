@@ -571,8 +571,7 @@ def get_miles_extra_args_provider(add_custom_arguments=None):
                 default=1.0,
                 help=(
                     "the top-p for the inference engine during rollout. Values below 1 enable "
-                    "sampling-support replay and require --use-miles-router plus a positive "
-                    "--rollout-top-k."
+                    "sampling-support replay and require a positive --rollout-top-k."
                 ),
             )
             parser.add_argument(
