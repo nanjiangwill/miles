@@ -11,7 +11,12 @@ register_cuda_ci(
     labels=["fsdp", "sglang", "replay"],
     hardware=["hopper"],
 )
+# Under true-on-policy the log-prob diff and both KLs stay at 0. ppo_kl compares the training
+# forward with forward-only scoring, so it also covers the replay mask on the loss path.
 register_ci_gate(metric_key="train/train_rollout_logprob_abs_diff")
+register_ci_gate(metric_key="train/train_rollout_kl")
+register_ci_gate(metric_key="train/ppo_kl")
+register_ci_gate(metric_key="train/grad_norm")
 
 MODEL_NAME = "Qwen3-0.6B"
 NUM_GPUS = 2
